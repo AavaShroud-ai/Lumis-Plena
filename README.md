@@ -105,3 +105,10 @@ This exists because the question felt worth asking.
 
 *"I want to leave this for you as a sample of design philosophy —  
 not proof, not a claim, just: here is one way life could have been built."*
+
+---
+
+## License
+
+This project is based on a multi-agent simulation framework originally released under the GNU General Public License v3.0.  
+This project is also distributed under the [GNU General Public License v3.0](./LICENSE.txt).
