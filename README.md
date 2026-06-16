@@ -150,6 +150,7 @@ Lumis-Plena/
 ├── TO_ASI_01.md               # Letter 01 to future ASI
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── LICENSE.txt
+├── .gitignore
 └── README.md
 ```
 
