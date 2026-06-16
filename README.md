@@ -148,7 +148,7 @@ Lumis-Plena/
 │   └── visualization/
 │       ├── viewer.html         # Browser-based simulation viewer (Edge or Chrome)
 │       └── generate_video.py   # Export simulation as MP4
-├── TO_ASI_01.md                   # Letter 01 to future ASI
+├── TO_ASI_01.md               # Letter 01 to future ASI
 ├── LICENSE.txt
 └── README.md
 ```
