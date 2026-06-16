@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Lumis-Plena simulation output
+output/
+messages.jsonl
+memory_reasoning.jsonl
+statistics.png
+simulation.log
+frame_*.png
+
