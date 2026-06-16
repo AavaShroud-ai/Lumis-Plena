@@ -9,8 +9,8 @@ simulation:
 # Agent Parameters
 agents:
   num_agents: 20
-  num_large: 2        # 大型Lumis（エネルギー供給・通信中継役）
-  num_small: 18       # 小型Lumis（観測・探索役）
+  num_large: 2        # Large Lumis (energy supply and communication relay)
+  num_small: 18       # Small Lumis (observation and exploration)
   communication_radius: 5  # Radius for agent communication
   memory_limit: 20  # Maximum number of memory entries to store
   memory_size: 5  # Number of recent memory entries used in LLM prompt
@@ -47,15 +47,15 @@ llm:
   min_p: 0.05  # Min-P (cuts noise while preserving intelligence)
   
 # Lunar Day/Night Cycle Parameters
-# 30step周期（昼15step + 夜15step）
+# 30-step cycle (15 steps day + 15 steps night)
 day_night_cycle:
-  period: 30      # 1サイクルの長さ（昼+夜）
-  night_length: 15  # サイクル内で夜になるstep数
+  period: 30      # Total cycle length (day + night)
+  night_length: 15  # Number of steps that are night within each cycle
   intensity: 0.9
   radius: 50
 
-# Solar Flare Events（昼間に突然発生、基地外の個体にダメージ）
-# warning_steps: フレア本体の何step前から電磁ノイズ予兆を出すか
+# Solar Flare Events (occur during daytime, damage agents outside bases)
+# warning_steps: how many steps before the flare to emit electromagnetic noise warning
 solar_flares:
   - name: "flare_1"
     start_step: 25
@@ -88,4 +88,3 @@ visualization:
 logging:
   level: "INFO"
   log_file: "simulation.log"
-
