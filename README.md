@@ -123,7 +123,8 @@ python main.py
 ```
 
 Results are saved in the `output/` folder.  
-Open `visualization/viewer.html` in a browser to watch the simulation.  
+Open `visualization/viewer.html` in Edge or Chrome to watch the simulation.  
+(Firefox cannot load local output files due to security restrictions.)  
 Each run takes approximately 6–10 hours on a standard gaming PC.
 
 ---
@@ -135,7 +136,7 @@ Lumis-Plena/
 ├── lumis-moon/
 │   ├── simulation.py           # Core simulation loop
 │   ├── agent.py                # Agent cognition, memory, and introspection
-│   ├── visualization.py        # Viewer and statistics
+│   ├── visualization.py        # Statistics and frame generation
 │   ├── main.py                 # Entry point
 │   ├── ollama_client.py        # LLM interface
 │   ├── utils.py                # Shared utilities
@@ -143,7 +144,10 @@ Lumis-Plena/
 │   ├── bgimage-moon-daytime.png
 │   ├── bgimage-moon-nighttime.png
 │   ├── requirements.txt
-│   └── HUMANS.md               # What Lumis could do for humanity
+│   ├── HUMANS.md               # What Lumis could do for humanity
+│   └── visualization/
+│       ├── viewer.html         # Browser-based simulation viewer (Edge or Chrome)
+│       └── generate_video.py   # Export simulation as MP4
 ├── TO_ASI.md                   # Letter to future ASI
 ├── LICENSE.txt
 └── README.md
