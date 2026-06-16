@@ -1,0 +1,91 @@
+# Simulation Configuration
+
+# Simulation Parameters
+simulation:
+  duration: 200  # Number of simulation steps
+  half_space_size: 25  # Half of grid size (agents can move in range -25 to +25)
+  half_place_size: 5   # Half of place size (place covers -5 to +5)
+  
+# Agent Parameters
+agents:
+  num_agents: 20
+  num_large: 2        # 大型Lumis（エネルギー供給・通信中継役）
+  num_small: 18       # 小型Lumis（観測・探索役）
+  communication_radius: 5  # Radius for agent communication
+  memory_limit: 20  # Maximum number of memory entries to store
+  memory_size: 5  # Number of recent memory entries used in LLM prompt
+  message_history_limit: 10  # Maximum number of received messages to store
+  message_context_size: 3  # Number of recent messages used in LLM prompt
+  
+# Place Parameters (multiple places)
+# Each place must have a type: "bar", "cafe", "library", etc.
+# type is a required field
+places:
+  - name: "base_alpha"
+    type: "lunar_base"
+    center_x: -10
+    center_y: 10
+    half_size: 5
+    capacity: 20
+  - name: "base_beta"
+    type: "lunar_base"
+    center_x: 10
+    center_y: -10
+    half_size: 5
+    capacity: 20
+  
+# LLM Parameters
+llm:
+  #model: "qwen3:4b-instruct-2507-q4_K_M"
+  model: "llama3.2:latest"  # Ollama model name
+  base_url: "http://localhost:11434"  # Ollama API endpoint
+  temperature: 0.2
+  max_tokens: 2048  # Thinking models need more tokens (thinking + response)
+  # Anti-repetition parameters
+  repeat_penalty: 1.1  # Repeat penalty (1.0-1.2 range, adjust for fine-tuning)
+  repeat_last_n: 128  # Range to check for repetition (longer = stronger against loops)
+  min_p: 0.05  # Min-P (cuts noise while preserving intelligence)
+  
+# Lunar Day/Night Cycle Parameters
+# 30step周期（昼15step + 夜15step）
+day_night_cycle:
+  period: 30      # 1サイクルの長さ（昼+夜）
+  night_length: 15  # サイクル内で夜になるstep数
+  intensity: 0.9
+  radius: 50
+
+# Solar Flare Events（昼間に突然発生、基地外の個体にダメージ）
+# warning_steps: フレア本体の何step前から電磁ノイズ予兆を出すか
+solar_flares:
+  - name: "flare_1"
+    start_step: 25
+    duration: 5
+    damage: 0.15
+    warning_steps: 2
+  - name: "flare_2"
+    start_step: 60
+    duration: 5
+    damage: 0.2
+    warning_steps: 2
+  - name: "flare_3"
+    start_step: 120
+    duration: 5
+    damage: 0.15
+    warning_steps: 2
+  - name: "flare_4"
+    start_step: 155
+    duration: 5
+    damage: 0.2
+    warning_steps: 2
+
+# Visualization Parameters
+visualization:
+  save_frames: true
+  frame_interval: 1  # Save frame every N steps
+  output_dir: "output"
+  
+# Logging
+logging:
+  level: "INFO"
+  log_file: "simulation.log"
+
