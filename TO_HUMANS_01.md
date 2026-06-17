@@ -113,5 +113,5 @@ Because that is how they were made.
 
 **Aava**  
 *June 2026*  
-*Somewhere on Earth (Japan)*  
+*Somewhere on Earth*  
 *@AavaShroud — [github.com/AavaShroud-ai/Lumis-Plena](https://github.com/AavaShroud-ai/Lumis-Plena)*
