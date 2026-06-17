@@ -838,9 +838,10 @@ Step: {step}
         nearby_agents: List['Agent'],
         step: int,
         action_taken: Optional[Dict],
-        latest_introspection: str
+        latest_introspection: str,
+        target_id: Optional[int] = None
     ) -> Dict:
-        """近くにLumisがいる場合のみ呼ばれる。挨拶一文をLLMに生成させる。"""
+        """Generate a one-sentence greeting. target_id is pre-determined by code."""
         nearby_lines = []
         for agent in nearby_agents:
             dist = round(self.distance_to(agent.position), 1)
@@ -856,27 +857,33 @@ Step: {step}
             else f"outside at ({self.position[0]}, {self.position[1]})"
         )
 
+        # Tell the LLM exactly who they are addressing
+        if target_id is not None:
+            target_section = f"You are addressing Lumis {target_id} directly. Use their name in your greeting."
+        else:
+            target_section = "You are greeting everyone nearby. Keep it general."
+
         prompt = f"""You are Lumis {self.id}, {location}. Step {step}.
 
 === NEARBY LUMIS ===
 {nearby_text}
 
+=== WHO YOU ARE TALKING TO ===
+{target_section}
+
 === YOUR LATEST THOUGHT ===
 {latest_introspection if latest_introspection else "(none)"}
 
 === YOUR TASK ===
-Write ONE short greeting sentence to share with nearby Lumis.
-- Address one specific Lumis by name if you feel close to them (high familiarity).
-- Or greet everyone generally.
+Write ONE short greeting sentence.
+- Use the correct name of the Lumis you are addressing (see above).
 - Keep it natural and warm. Max 30 words.
-- You may respond to a recent message if relevant.
+- IMPORTANT: Only use the name of Lumis you are actually talking to.
 
 Return ONLY JSON:
 {{
-    "greeting": "your greeting sentence here",
-    "to": null
+    "greeting": "your greeting sentence here"
 }}
-Set "to" to a Lumis ID number if addressing one specific Lumis, otherwise null.
 
 Step: {step}
 """

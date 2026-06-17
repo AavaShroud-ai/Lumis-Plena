@@ -869,26 +869,23 @@ class Simulation:
             latest_intro = introspection_map.get(agent.id, "")
             intro_line = f" {latest_intro}" if latest_intro else ""
 
-            # LLM-generated greeting
+            # Determine target first (highest familiarity), then generate greeting
+            # This ensures the greeting addresses the correct Lumis by name
+            best_target = max(nearby_agents, key=lambda a: agent.get_familiarity_score(a.id))
+            target_id = best_target.id if agent.get_familiarity_score(best_target.id) >= 0.1 else None
+            targets = [best_target] if target_id is not None else nearby_agents
+
+            # LLM-generated greeting (target is now known before LLM call)
             greeting_result = agent.decide_greeting(
-                nearby_agents, self.step, action_taken, latest_intro
+                nearby_agents, self.step, action_taken, latest_intro,
+                target_id=target_id
             )
             greeting = greeting_result.get('greeting', '')
-            target_id = greeting_result.get('to')
 
             # Assemble full message
             message_content = header + intro_line
             if greeting:
                 message_content += f" {greeting}"
-
-            # Determine recipients
-            if target_id is not None:
-                targets = [a for a in nearby_agents if a.id == target_id]
-                if not targets:
-                    targets = nearby_agents
-                    target_id = None
-            else:
-                targets = nearby_agents
 
             if target_id is not None:
                 logger.info(
@@ -1086,7 +1083,7 @@ class Simulation:
                 # 条件：energy≥0.5、valence≥0.5、familiarity≥0.1、成熟済み、クールダウン完了、生涯2回まで
                 # サイズ同士のみ（大×大、小×小）、基地内外どちらでも可
                 if (agent.lumis_type == "small" and
-                        agent.sexual_count < 2 and
+                        agent.sexual_count < 1 and
                         agent.valence >= 0.5 and
                         agent.energy >= 0.5 and
                         mature and

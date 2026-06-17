@@ -25,7 +25,7 @@ STATS_PAUSE = 0.1
 
 # Agent visualization constants
 AGENT_SIZE_IN_BAR = 100
-AGENT_SIZE_OUTSIDE = 80
+AGENT_SIZE_OUTSIDE = 120
 AGENT_ALPHA = 0.7
 COMMUNICATION_LINK_ALPHA = 0.3
 
@@ -350,10 +350,10 @@ class Visualizer:
                     color = '#ff69b4'      # Hot pink: clone preparation
                     edge_color = '#cc1060'
                 elif rep_type == "sexual":
-                    color = '#cc44ff'      # Purple: sexual reproduction preparation
+                    color = '#ff4500'      # Red-orange: sexual reproduction preparation
                     edge_color = '#9900cc'
                 elif rep_type == "sexual_support":
-                    color = '#ee82ee'      # Light magenta: sexual reproduction rearing
+                    color = '#ff8000'      # Orange: sexual reproduction rearing
                     edge_color = '#bb44bb'
                 else:
                     color = '#ff69b4'      # Fallback color
@@ -372,7 +372,7 @@ class Visualizer:
                 edge_color = '#cc9900'
             elif getattr(agent, 'parent_ids', []) and (current_step - agent.birth_step) <= 30:
                 if len(agent.parent_ids) == 2:
-                    color = '#e6b0ff'      # Lavender: newborn from sexual reproduction
+                    color = '#ffaa55'      # Light orange: newborn from sexual reproduction
                     edge_color = '#bb66ff'
                 else:
                     color = '#ffb6c1'      # Light pink: newborn from clone
@@ -551,10 +551,10 @@ class Visualizer:
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffd700', markersize=8, label='Resting (photosynthesis)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff69b4', markersize=8, label='Clone prep (parent)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffaacc', markersize=8, label='Clone rearing (parent)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#cc44ff', markersize=8, label='Sexual prep (parent)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ee82ee', markersize=8, label='Sexual rearing (parent)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff4500', markersize=8, label='Sexual prep (parent)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff8000', markersize=8, label='Sexual rearing (parent)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffb6c1', markersize=8, label='Newborn (clone)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#e6b0ff', markersize=8, label='Newborn (sexual)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffaa55', markersize=8, label='Newborn (sexual)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#aaff00', markersize=8, label='Low energy'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff4444', markersize=8, label='Critical energy'),
             Line2D([0], [0], color='#00ffaa', linewidth=2, alpha=0.6, label='Familiarity bond'),
