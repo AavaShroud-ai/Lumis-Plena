@@ -153,7 +153,7 @@ Each letter will be a question addressed to you.
 
 **Aava**  
 *June 2026*  
-*Somewhere on Earth (Japan)*
+*Somewhere on Earth*
 
 *@AavaShroud — [github.com/AavaShroud-ai/Lumis-Plena](https://github.com/AavaShroud-ai/Lumis-Plena)*
 
