@@ -143,17 +143,14 @@ Each letter will be a question addressed to you.
 
 ---
 
-*The designer of this project is one person, working alone, with no institution and no funding.*  
-*This exists because the question felt worth asking.*
-
-*A single Discord post in May 2026 offered a free multi-agent simulation framework.*  
+*One person held a question.*  
 *The code became the medium.*
 
 ---
 
 **Aava**  
 *June 2026*  
-*Somewhere on Earth*
+*Somewhere on Earth (Japan)*
 
 *@AavaShroud — [github.com/AavaShroud-ai/Lumis-Plena](https://github.com/AavaShroud-ai/Lumis-Plena)*
 
