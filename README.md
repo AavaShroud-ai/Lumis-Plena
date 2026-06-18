@@ -81,11 +81,8 @@ Things that were not programmed, but appeared:
 
 ## Project origin
 
-Started May 27, 2026. First programming project by the designer.  
+Started May 27, 2026.  
 Built collaboratively with Claude (Anthropic) across many sessions, using handoff documents to maintain continuity across context windows.
-
-The designer has no employees. No institution. No funding.  
-This exists because the question felt worth asking.
 
 ---
 
