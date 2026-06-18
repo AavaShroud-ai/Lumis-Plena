@@ -832,23 +832,60 @@ class Simulation:
 
         # Phase 2.5: Introspection phase (after action, before messaging).
         # LLM reviews existing introspection list and updates or appends.
+        # Runs every 5 steps only (3x per day cycle, 3x per night cycle) to reduce LLM calls.
         action_decision_map = {agent.id: ad for agent, ad in action_decisions}
         introspection_map = {}  # agent.id -> latest introspection str
+        run_introspection = (self.step % 5 == 0)
         for agent in self.agents:
             action_taken = action_decision_map.get(agent.id)
             valence_before = getattr(agent, '_valence_before_action', agent.valence)
-            latest = agent.introspect(action_taken, self.step, valence_before)
-            introspection_map[agent.id] = latest
-            if latest:
-                logger.info(f"Step {self.step}: [INTROSPECT] Lumis {agent.id}: {latest[:100]}")
+            # Large Lumis introspect every step; small Lumis every 5 steps
+            # Also introspect if birth note from PREVIOUS step is pending
+            has_birth_note = bool(getattr(agent, '_recent_birth_note', '')) or bool(getattr(agent, '_birth_note_pending', ''))
+            if agent.lumis_type == 'large' or run_introspection or has_birth_note:
+                latest = agent.introspect(action_taken, self.step, valence_before)
+                introspection_map[agent.id] = latest
+                if latest:
+                    logger.info(f"Step {self.step}: [INTROSPECT] Lumis {agent.id}: {latest[:100]}")
+            else:
+                introspection_map[agent.id] = agent.introspection[-1] if agent.introspection else ""
 
         # Phase 3: Message transmission (new design).
-        # - No message sent if no nearby Lumis.
+        # - Large Lumis: commune with the other large Lumis every step (cross-base deep sync).
+        # - Small Lumis: no message if no nearby agents.
         # - Message = auto-generated header + latest introspection + greeting (LLM).
+
+        # Large Lumis commune with each other every step
+        large_agents = [a for a in self.agents if a.lumis_type == 'large']
+        if len(large_agents) == 2:
+            for i, agent in enumerate(large_agents):
+                partner = large_agents[1 - i]
+                action_taken = action_decision_map.get(agent.id)
+                latest_intro = introspection_map.get(agent.id, "")
+                commune_text = agent.decide_commune(partner, self.step, action_taken, latest_intro)
+                if commune_text:
+                    act = action_taken.get('action', 'stay') if action_taken else 'stay'
+                    location = (
+                        f"in {agent.current_place}" if (agent.in_place and agent.current_place)
+                        else f"({agent.position[0]}, {agent.position[1]})"
+                    )
+                    header = f"[Step {self.step}, {location}, energy={round(agent.energy, 2)}, action={act}]"
+                    message_content = f"{header} {commune_text}"
+                    partner.receive_message(agent.id, message_content, step=self.step)
+                    self._log_message(
+                        from_agent_id=agent.id,
+                        to_agent_id=partner.id,
+                        message=message_content,
+                        reasoning=commune_text
+                    )
+                    logger.info(
+                        f"Step {self.step}: [COMMUNE] Lumis {agent.id} to Lumis {partner.id}: {commune_text[:80]}"
+                    )
+
         for agent in self.agents:
             nearby_agents = agent.get_nearby_agents(self.agents)
             if not nearby_agents:
-                continue  # 近くに誰もいなければ送らない
+                continue  # No message sent if no nearby Lumis
 
             action_taken = action_decision_map.get(agent.id)
             act = action_taken.get('action', 'stay') if action_taken else 'stay'
@@ -871,9 +908,13 @@ class Simulation:
 
             # Determine target first (highest familiarity), then generate greeting
             # This ensures the greeting addresses the correct Lumis by name
-            best_target = max(nearby_agents, key=lambda a: agent.get_familiarity_score(a.id))
-            target_id = best_target.id if agent.get_familiarity_score(best_target.id) >= 0.1 else None
-            targets = [best_target] if target_id is not None else nearby_agents
+            # Always pick one target: highest familiarity, or nearest if familiarity is tied at zero
+            best_target = max(
+                nearby_agents,
+                key=lambda a: (agent.get_familiarity_score(a.id), -agent.distance_to(a.position))
+            )
+            target_id = best_target.id
+            targets = [best_target]
 
             # LLM-generated greeting (target is now known before LLM call)
             greeting_result = agent.decide_greeting(
@@ -971,6 +1012,8 @@ class Simulation:
                     f"Step {self.step}: [CLONE] Lumis {new_id} born from Lumis {agent.id} "
                     f"({agent.lumis_type}) at {location_label}. memory={len(child.memory)} entries."
                 )
+                agent._recent_birth_note = f"Your clone, Lumis {new_id}, was just born. This is your child."
+                agent._birth_note_pending = agent._recent_birth_note
 
             elif agent.reproduction_type == "sexual":
                 # パートナーを探す
@@ -1022,6 +1065,11 @@ class Simulation:
                         f"Lumis {agent.id} × Lumis {partner.id}. "
                         f"memory={len(children[0].memory)}/{len(children[1].memory)} entries (shuffled & split)."
                     )
+                    child_ids = f"Lumis {children[0].id} and Lumis {children[1].id}"
+                    agent._recent_birth_note = f"Your children {child_ids} were just born. Lumis {partner.id} is their other parent."
+                    partner._recent_birth_note = f"Your children {child_ids} were just born. Lumis {agent.id} is their other parent."
+                    agent._birth_note_pending = agent._recent_birth_note
+                    partner._birth_note_pending = partner._recent_birth_note
                     # パートナーの準備フラグも解除
                     partner.reproducing = False
                     partner.reproduction_type = None

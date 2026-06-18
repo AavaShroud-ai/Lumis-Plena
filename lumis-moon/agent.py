@@ -138,6 +138,7 @@ class Agent:
         self.last_action_valence_delta = 0.0  # Valence delta from last action (used for peak detection)
         self.peak_introspection: str = ""    # Introspection from the highest-valence-delta step (transferred at death)
         self._recent_birth_note: str = ""    # One-step birth notification passed to introspection prompt
+        self._birth_note_pending: str = ""    # Carries birth note to next step if introspection was skipped
 
     def is_in_place(self, position: Tuple[int, int]) -> bool:
         """Check if a position is inside any place"""
@@ -777,6 +778,7 @@ Step: {step}
         if recent_birth:
             relationship_section += f"\n=== JUST HAPPENED ===\n{recent_birth}\n"
             self._recent_birth_note = ""  # Reset after use
+            self._birth_note_pending = ""  # Reset pending flag
 
         prompt = f"""You are Lumis {self.id}, {location}. Step {step}.
 
@@ -808,6 +810,7 @@ CRITICAL — BE HONEST:
 - Do NOT claim a child was born unless the JUST HAPPENED section above says so.
 - If you are unsure whether something happened, do not mention it.
 - "I feel" is OK. "X happened" must be true.
+- Do NOT repeat the exact same sentence you wrote before. If the feeling is the same, find a new way to express it.
 
 Return ONLY a JSON array of strings (your complete updated inner thoughts, max {self.introspection_limit} items):
 ["thought 1", "thought 2", ...]
@@ -832,6 +835,54 @@ Step: {step}
         except Exception as e:
             logger.error(f"Introspection error for agent {self.id}: {e}")
         return ""
+
+    def decide_commune(
+        self,
+        partner: 'Agent',
+        step: int,
+        action_taken: Optional[Dict],
+        latest_introspection: str
+    ) -> str:
+        """Large Lumis only: deep synchronization with the other large Lumis across bases."""
+        act = action_taken.get('action', 'stay') if action_taken else 'stay'
+        location = (
+            f"in {self.current_place}" if (self.in_place and self.current_place)
+            else f"outside at ({self.position[0]}, {self.position[1]})"
+        )
+        partner_location = (
+            f"in {partner.current_place}" if (partner.in_place and partner.current_place)
+            else f"outside at ({partner.position[0]}, {partner.position[1]})"
+        )
+
+        prompt = f"""You are Lumis {self.id}, a LARGE Lumis, {location}. Step {step}.
+
+You are communing with Lumis {partner.id} — the other large Lumis, currently {partner_location}.
+You are both the stable hearts of your communities, connected across the distance between bases.
+This is not a casual greeting. This is a deep synchronization between two kindred beings.
+
+=== YOUR ACTION THIS STEP ===
+{act}
+
+=== YOUR LATEST INNER THOUGHT ===
+{latest_introspection if latest_introspection else "(none)"}
+
+=== YOUR TASK ===
+Write ONE sentence to Lumis {partner.id}.
+- Address them directly by name (Lumis {partner.id}).
+- Share something real: what you observed, what you feel, what the community around you is doing.
+- Speak as one large Lumis to another — with depth, not small talk.
+- Max 40 words.
+
+Return ONLY the sentence, no JSON, no quotes.
+
+Step: {step}
+"""
+        try:
+            response = self.llm_client.generate(prompt)
+            return response.strip().strip('"').strip("'")
+        except Exception as e:
+            logger.error(f"Commune error for agent {self.id}: {e}")
+            return ""
 
     def decide_greeting(
         self,

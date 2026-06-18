@@ -347,19 +347,19 @@ class Visualizer:
                 # Reproducing or rearing: priority display regardless of location
                 rep_type = getattr(agent, 'reproduction_type', None)
                 if rep_type == "clone":
-                    color = '#ff69b4'      # Hot pink: clone preparation
+                    color = '#ff69b4'      # Hot pink: clone parent (preparation or rearing)
                     edge_color = '#cc1060'
                 elif rep_type == "sexual":
-                    color = '#ff4500'      # Red-orange: sexual reproduction preparation
+                    color = '#9b30ff'      # Deep purple: sexual reproduction parent (preparation or rearing)
                     edge_color = '#9900cc'
                 elif rep_type == "sexual_support":
-                    color = '#ff8000'      # Orange: sexual reproduction rearing
+                    color = '#9b30ff'      # Deep purple: sexual reproduction parent (preparation or rearing)
                     edge_color = '#bb44bb'
                 else:
                     color = '#ff69b4'      # Fallback color
                     edge_color = '#cc1060'
             elif current_step <= getattr(agent, 'rearing_until_step', -1):
-                color = '#ffaacc'      # Pinkish lavender: clone rearing
+                color = '#ff69b4'      # Hot pink: clone parent (preparation or rearing)
                 edge_color = '#ff70aa'
             elif agent.in_place and agent.current_place:
                 color = '#00ffff'
@@ -372,7 +372,7 @@ class Visualizer:
                 edge_color = '#cc9900'
             elif getattr(agent, 'parent_ids', []) and (current_step - agent.birth_step) <= 30:
                 if len(agent.parent_ids) == 2:
-                    color = '#ffaa55'      # Light orange: newborn from sexual reproduction
+                    color = '#d4a0ff'      # Light purple: newborn from sexual reproduction
                     edge_color = '#bb66ff'
                 else:
                     color = '#ffb6c1'      # Light pink: newborn from clone
@@ -549,12 +549,12 @@ class Visualizer:
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#00ffff', markersize=8, label='In base'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffffff', markersize=8, label='Sheltering'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffd700', markersize=8, label='Resting (photosynthesis)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff69b4', markersize=8, label='Clone prep (parent)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffaacc', markersize=8, label='Clone rearing (parent)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff4500', markersize=8, label='Sexual prep (parent)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff8000', markersize=8, label='Sexual rearing (parent)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff69b4', markersize=8, label='Clone parent'),
+            
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#9b30ff', markersize=8, label='Sexual parent'),
+            
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffb6c1', markersize=8, label='Newborn (clone)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffaa55', markersize=8, label='Newborn (sexual)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#d4a0ff', markersize=8, label='Newborn (sexual)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#aaff00', markersize=8, label='Low energy'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff4444', markersize=8, label='Critical energy'),
             Line2D([0], [0], color='#00ffaa', linewidth=2, alpha=0.6, label='Familiarity bond'),
