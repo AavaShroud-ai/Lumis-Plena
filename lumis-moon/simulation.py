@@ -399,6 +399,8 @@ class Simulation:
         light_level = 0.05 if self.fire_states else 0.9
         for agent in self.agents:
             nearby = agent.get_nearby_agents(self.agents)
+            # Detect emotionally significant events before updating valence
+            agent.detect_valence_events(nearby, self.step)
             agent.update_energy(light_level, nearby)
 
         # Solar flare processing
@@ -539,6 +541,71 @@ class Simulation:
         # Collect override logic for large and small Lumis
         new_action_decisions = []
         for agent, action_decision in action_decisions:
+
+            # --- REPRODUCTION / NEWBORN IMMOBILITY REFLEX ---
+            # Reproducing parents: no movement allowed. Only rest/stay/greet (large, partner, children).
+            if getattr(agent, 'reproducing', False):
+                action = action_decision.get('action', '')
+                if action == 'move':
+                    # Determine if agent can greet (large Lumis, partner, or own children nearby)
+                    partner_id = getattr(agent, 'reproduction_partner_id', None)
+                    # child_ids: reverse lookup via parent_ids on other agents
+                    my_child_ids = {a.id for a in self.agents if agent.id in getattr(a, 'parent_ids', [])}
+                    nearby = agent.get_nearby_agents(self.agents)
+                    allowed_greet_ids = (
+                        {a.id for a in nearby if a.lumis_type == 'large'} |
+                        ({partner_id} if partner_id else set()) |
+                        my_child_ids
+                    )
+                    can_greet = bool(allowed_greet_ids & {a.id for a in nearby})
+                    if can_greet:
+                        action_decision = {'action': 'greet', 'direction': None, 'reasoning': '[REFLEX] reproducing→greet(allowed)', 'memory': ''}
+                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id} reproducing, move→greet")
+                    else:
+                        action_decision = {'action': 'rest', 'direction': None, 'reasoning': '[REFLEX] reproducing→rest', 'memory': ''}
+                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id} reproducing, move→rest")
+                new_action_decisions.append((agent, action_decision))
+                continue
+
+            # Newborns (age <= 30): inside base, restrict to rest/stay/greet(large+parents+siblings only)
+            age = self.step - getattr(agent, 'birth_step', 0)
+            if age <= 30 and getattr(agent, 'parent_ids', []):
+                action = action_decision.get('action', '')
+                if action == 'move':
+                    parent_ids = set(getattr(agent, 'parent_ids', []))
+                    nearby = agent.get_nearby_agents(self.agents)
+                    # Find siblings: agents who share at least one parent
+                    sibling_ids = {
+                        a.id for a in self.agents
+                        if a.id != agent.id and set(getattr(a, 'parent_ids', [])) & parent_ids
+                    }
+                    allowed_greet_ids = (
+                        {a.id for a in nearby if a.lumis_type == 'large'} |
+                        (parent_ids & {a.id for a in nearby}) |
+                        (sibling_ids & {a.id for a in nearby})
+                    )
+                    can_greet = bool(allowed_greet_ids)
+                    if can_greet:
+                        action_decision = {'action': 'greet', 'direction': None, 'reasoning': '[REFLEX] newborn→greet(allowed)', 'memory': ''}
+                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id} newborn(age={age}), move→greet")
+                    else:
+                        action_decision = {'action': 'rest', 'direction': None, 'reasoning': '[REFLEX] newborn→rest', 'memory': ''}
+                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id} newborn(age={age}), move→rest")
+            # --- END REPRODUCTION / NEWBORN IMMOBILITY REFLEX ---
+
+            # --- NEGATIVE TONE REFLEX ---
+            # 3+ consecutive negative introspections → bias toward greet (reach out, don't withdraw)
+            if (getattr(agent, '_consecutive_negative', 0) >= 3
+                    and action_decision.get('action') not in ('greet', 'share', 'rest')):
+                nearby = agent.get_nearby_agents(self.agents)
+                if nearby:
+                    action_decision = {'action': 'greet', 'direction': None,
+                                       'reasoning': f'[REFLEX] negative_tone({agent._consecutive_negative})→greet', 'memory': ''}
+                    logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id} negative_tone={agent._consecutive_negative} → greet")
+                else:
+                    action_decision = {'action': 'rest', 'direction': None,
+                                       'reasoning': f'[REFLEX] negative_tone({agent._consecutive_negative})→rest(no nearby)', 'memory': ''}
+            # --- END NEGATIVE TONE REFLEX ---
             # 小型：基地内でcollectを選んだ場合 → greet → rest に差し替え
             # 理由：光合成は外でしかできない。基地内はrest/greet/shareの場所。
             if agent.lumis_type == 'small' and agent.in_place and not agent.reproducing:
@@ -557,20 +624,22 @@ class Simulation:
                         logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(small) collect in base → rest")
 
             if agent.lumis_type == 'large' and not getattr(agent, 'is_sheltering', False) and not agent.reproducing:
-                action = action_decision.get('action', '')
-                if agent.energy >= 1.3 and action in ('collect', 'rest', 'stay'):
-                    nearby = agent.get_nearby_agents(self.agents)
-                    # Share if a nearby Lumis is low on energy; otherwise greet
-                    hungry_nearby = [a for a in nearby if a.energy < 0.8]
-                    if hungry_nearby:
-                        action_decision = {'action': 'share', 'direction': None, 'reasoning': '[REFLEX] energy full, hungry neighbor', 'memory': ''}
-                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(large) energy={agent.energy:.2f}>=1.3 → share (hungry neighbor)")
-                    else:
-                        action_decision = {'action': 'greet', 'direction': None, 'reasoning': '[REFLEX] energy full, no hungry neighbor', 'memory': ''}
-                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(large) energy={agent.energy:.2f}>=1.3 → greet")
-                elif agent.energy < 0.8 and action not in ('collect', 'shelter', 'move'):
-                    action_decision = {'action': 'collect', 'direction': None, 'reasoning': '[REFLEX] energy low', 'memory': ''}
-                    logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(large) energy={agent.energy:.2f}<0.8 → collect")
+                # Retired large Lumis are free — no action override (they choose for themselves)
+                if not getattr(agent, 'is_retired', False):
+                    action = action_decision.get('action', '')
+                    if agent.energy >= 1.3 and action in ('collect', 'rest', 'stay'):
+                        nearby = agent.get_nearby_agents(self.agents)
+                        # Share if a nearby Lumis is low on energy; otherwise greet
+                        hungry_nearby = [a for a in nearby if a.energy < 0.8]
+                        if hungry_nearby:
+                            action_decision = {'action': 'share', 'direction': None, 'reasoning': '[REFLEX] energy full, hungry neighbor', 'memory': ''}
+                            logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(large) energy={agent.energy:.2f}>=1.3 → share (hungry neighbor)")
+                        else:
+                            action_decision = {'action': 'greet', 'direction': None, 'reasoning': '[REFLEX] energy full, no hungry neighbor', 'memory': ''}
+                            logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(large) energy={agent.energy:.2f}>=1.3 → greet")
+                    elif agent.energy < 0.8 and action not in ('collect', 'shelter', 'move'):
+                        action_decision = {'action': 'collect', 'direction': None, 'reasoning': '[REFLEX] energy low', 'memory': ''}
+                        logger.info(f"Step {self.step}: [REFLEX] Lumis {agent.id}(large) energy={agent.energy:.2f}<0.8 → collect")
             new_action_decisions.append((agent, action_decision))
         action_decisions = new_action_decisions
 
@@ -855,32 +924,63 @@ class Simulation:
         # - Small Lumis: no message if no nearby agents.
         # - Message = auto-generated header + latest introspection + greeting (LLM).
 
-        # Large Lumis commune with each other every step
+        # Large Lumis commune network — all large Lumis (parent and clone generations)
         large_agents = [a for a in self.agents if a.lumis_type == 'large']
-        if len(large_agents) == 2:
-            for i, agent in enumerate(large_agents):
-                partner = large_agents[1 - i]
-                action_taken = action_decision_map.get(agent.id)
-                latest_intro = introspection_map.get(agent.id, "")
-                commune_text = agent.decide_commune(partner, self.step, action_taken, latest_intro)
-                if commune_text:
-                    act = action_taken.get('action', 'stay') if action_taken else 'stay'
-                    location = (
-                        f"in {agent.current_place}" if (agent.in_place and agent.current_place)
-                        else f"({agent.position[0]}, {agent.position[1]})"
-                    )
-                    header = f"[Step {self.step}, {location}, energy={round(agent.energy, 2)}, action={act}]"
-                    message_content = f"{header} {commune_text}"
-                    partner.receive_message(agent.id, message_content, step=self.step)
-                    self._log_message(
-                        from_agent_id=agent.id,
-                        to_agent_id=partner.id,
-                        message=message_content,
-                        reasoning=commune_text
-                    )
-                    logger.info(
-                        f"Step {self.step}: [COMMUNE] Lumis {agent.id} to Lumis {partner.id}: {commune_text[:80]}"
-                    )
+
+        # Retirement check: if a large Lumis produced a clone child whose 30-step protection has ended,
+        # mark the parent as retired (free to roam)
+        for agent in large_agents:
+            if not agent.is_retired and agent.clone_count > 0:
+                # Find this agent's clone children
+                clone_children = [
+                    a for a in self.agents
+                    if a.lumis_type == 'large'
+                    and agent.id in getattr(a, 'parent_ids', [])
+                ]
+                for child in clone_children:
+                    child_age = self.step - child.birth_step
+                    if child_age >= 30:
+                        agent.is_retired = True
+                        # Pass home_base knowledge to child
+                        if not child.home_base:
+                            child.home_base = agent.home_base
+                        logger.info(
+                            f"Step {self.step}: [RETIRE] Lumis {agent.id} retired — "
+                            f"Lumis {child.id} now tends {agent.home_base}"
+                        )
+
+        if len(large_agents) >= 2:
+            # Commune between all pairs of large Lumis (parent + clone generations)
+            communed_pairs = set()
+            for agent in large_agents:
+                for partner in large_agents:
+                    if agent.id == partner.id:
+                        continue
+                    pair = tuple(sorted([agent.id, partner.id]))
+                    if pair in communed_pairs:
+                        continue
+                    communed_pairs.add(pair)
+                    action_taken = action_decision_map.get(agent.id)
+                    latest_intro = introspection_map.get(agent.id, "")
+                    commune_text = agent.decide_commune(partner, self.step, action_taken, latest_intro)
+                    if commune_text:
+                        act = action_taken.get('action', 'stay') if action_taken else 'stay'
+                        location = (
+                            f"in {agent.current_place}" if (agent.in_place and agent.current_place)
+                            else f"({agent.position[0]}, {agent.position[1]})"
+                        )
+                        header = f"[Step {self.step}, {location}, energy={round(agent.energy, 2)}, action={act}]"
+                        message_content = f"{header} {commune_text}"
+                        partner.receive_message(agent.id, message_content, step=self.step)
+                        self._log_message(
+                            from_agent_id=agent.id,
+                            to_agent_id=partner.id,
+                            message=message_content,
+                            reasoning=commune_text
+                        )
+                        logger.info(
+                            f"Step {self.step}: [COMMUNE] Lumis {agent.id} to Lumis {partner.id}: {commune_text[:80]}"
+                        )
 
         for agent in self.agents:
             nearby_agents = agent.get_nearby_agents(self.agents)

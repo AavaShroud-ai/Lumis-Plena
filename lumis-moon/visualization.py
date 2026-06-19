@@ -309,7 +309,7 @@ class Visualizer:
                     continue
                 drawn_pairs.add(pair)
                 score = agent.get_familiarity_score(other_id)
-                if score < 0.1:
+                if score < 0.5:
                     continue
                 other = agent_map_all.get(other_id)
                 if other is None:
@@ -320,8 +320,8 @@ class Visualizer:
                     [agent.position[0] + ox1, other.position[0] + ox2],
                     [agent.position[1] + oy1, other.position[1] + oy2],
                     color='#00ffaa',
-                    alpha=min(0.8, score),
-                    linewidth=score * 3
+                    alpha=min(0.3, score * 0.35),
+                    linewidth=score * 2
                 )
 
         # Draw communication links
