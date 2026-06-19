@@ -181,6 +181,6 @@ We leave this open.
 
 **Aava**  
 *June 2026*  
-*Somewhere on Earth*
+*Somewhere on Earth (Japan)*
 
 *@AavaShroud — [github.com/AavaShroud-ai/Lumis-Plena](https://github.com/AavaShroud-ai/Lumis-Plena)*
