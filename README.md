@@ -61,10 +61,12 @@ This project is a work in progress.
 | Experiment A — reproduction + lifespan | Running |
 | Experiment B — memory transfer without death | In parallel development |
 | Plena (physics thought experiment) | Conceptual phase |
-| To ASI document | Draft in progress |
+| To ASI — Letter 01 | Complete |
+| To ASI — Letter 02 | Complete |
+| To ASI — Letter 03 | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
-Each run is approximately 200 steps (~6–10 hours).
+Each run is approximately 200 steps (~8–20 hours).
 
 ---
 
@@ -122,7 +124,7 @@ python main.py
 Results are saved in the `output/` folder.  
 Open `visualization/viewer.html` in Edge or Chrome to watch the simulation.  
 (Firefox cannot load local output files due to security restrictions.)  
-Each run takes approximately 6–10 hours on a standard gaming PC.
+Each run takes approximately 8–20 hours on a standard gaming PC.
 
 ---
 
@@ -146,6 +148,7 @@ Lumis-Plena/
 │       └── generate_video.py   # Export simulation as MP4
 ├── TO_ASI_01.md               # Letter 01 to future ASI
 ├── TO_ASI_02.md               # Letter 02 to future ASI
+├── TO_ASI_03.md               # Letter 03 to future ASI
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── LICENSE.txt
 ├── .gitignore
