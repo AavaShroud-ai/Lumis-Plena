@@ -10,6 +10,7 @@ import os
 import time
 import logging
 from typing import List, Dict, Tuple, Optional
+from agent import lumis_name
 
 # Set backend for compatibility (Mac, Linux, WSL)
 GUI_BACKENDS = ['TkAgg', 'Qt5Agg', 'MacOSX', 'Qt4Agg']
@@ -347,20 +348,28 @@ class Visualizer:
                 # Reproducing or rearing: priority display regardless of location
                 rep_type = getattr(agent, 'reproduction_type', None)
                 if rep_type == "clone":
-                    color = '#ff69b4'      # Hot pink: clone parent (preparation or rearing)
+                    color = '#ff1493'      # Hot pink: clone parent (preparation or rearing)
                     edge_color = '#cc1060'
                 elif rep_type == "sexual":
-                    color = '#9b30ff'      # Deep purple: sexual reproduction parent (preparation or rearing)
+                    color = '#6600cc'      # Deep purple: sexual reproduction parent (preparation or rearing)
                     edge_color = '#9900cc'
                 elif rep_type == "sexual_support":
-                    color = '#9b30ff'      # Deep purple: sexual reproduction parent (preparation or rearing)
+                    color = '#6600cc'      # Deep purple: sexual reproduction parent (preparation or rearing)
                     edge_color = '#bb44bb'
                 else:
-                    color = '#ff69b4'      # Fallback color
+                    color = '#ff1493'      # Fallback color
                     edge_color = '#cc1060'
             elif current_step <= getattr(agent, 'rearing_until_step', -1):
-                color = '#ff69b4'      # Hot pink: clone parent (preparation or rearing)
+                color = '#ff1493'      # Hot pink: clone parent (preparation or rearing)
                 edge_color = '#ff70aa'
+            elif getattr(agent, 'parent_ids', []) and (current_step - agent.birth_step) <= 30:
+                # Newborn check: MUST come before in_place to override cyan
+                if len(agent.parent_ids) == 2:
+                    color = '#e8c8ff'      # Light purple: newborn from sexual reproduction
+                    edge_color = '#d4a0ff'
+                else:
+                    color = '#ffd6e0'      # Light pink: newborn from clone
+                    edge_color = '#ffaacc'
             elif agent.in_place and agent.current_place:
                 color = '#00ffff'
                 edge_color = 'white'
@@ -370,13 +379,6 @@ class Visualizer:
             elif getattr(agent, 'is_resting', False):
                 color = '#ffd700'      # Gold: photosynthesizing outside
                 edge_color = '#cc9900'
-            elif getattr(agent, 'parent_ids', []) and (current_step - agent.birth_step) <= 30:
-                if len(agent.parent_ids) == 2:
-                    color = '#d4a0ff'      # Light purple: newborn from sexual reproduction
-                    edge_color = '#bb66ff'
-                else:
-                    color = '#ffb6c1'      # Light pink: newborn from clone
-                    edge_color = '#ff80a0'
             else:
                 # Color varies by energy level
                 e = agent.energy / getattr(agent, 'energy_capacity', 1.0)
@@ -410,7 +412,7 @@ class Visualizer:
             )
 
             # Add Lumis ID label
-            label = f"L{agent.id}" if is_large else str(agent.id)
+            label = lumis_name(agent.id)
             self.ax.text(
                 agent.position[0] + ox + 0.5,
                 agent.position[1] + oy + 0.5,
@@ -549,12 +551,12 @@ class Visualizer:
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#00ffff', markersize=8, label='In base'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffffff', markersize=8, label='Sheltering'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffd700', markersize=8, label='Resting (photosynthesis)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff69b4', markersize=8, label='Clone parent'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff1493', markersize=8, label='Clone parent'),
             
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#9b30ff', markersize=8, label='Sexual parent'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#6600cc', markersize=8, label='Sexual parent'),
             
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffb6c1', markersize=8, label='Newborn (clone)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#d4a0ff', markersize=8, label='Newborn (sexual)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffd6e0', markersize=8, label='Newborn (clone)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#e8c8ff', markersize=8, label='Newborn (sexual)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#aaff00', markersize=8, label='Low energy'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff4444', markersize=8, label='Critical energy'),
             Line2D([0], [0], color='#00ffaa', linewidth=2, alpha=0.6, label='Familiarity bond'),

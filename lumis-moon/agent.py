@@ -14,6 +14,20 @@ from utils import is_position_in_place, get_place_at_position, PlaceConfig
 
 logger = logging.getLogger(__name__)
 
+
+def lumis_name(agent_id: int) -> str:
+    """Return the display name for a Lumis agent.
+
+    ID 0  → 'L0'  (large, base_alpha)
+    ID 1  → 'L1'  (large, base_beta)
+    ID 2+ → 'S{id}' (small, initial or born)
+    """
+    if agent_id == 0:
+        return "L0"
+    if agent_id == 1:
+        return "L1"
+    return f"S{agent_id}"
+
 # Constants
 FALLBACK_REASONING_LENGTH = 100
 MAX_MESSAGE_WORDS = 200
@@ -122,7 +136,6 @@ class Agent:
         self.sexual_count = 0      # Number of sexual reproductions (lifetime limit: 2)
         self.parent_ids: List[int] = []  # IDs of parent agents (empty if initial generation)
         self.home_base: Optional[str] = None  # Home base for large Lumis (L0=base_alpha, L1=base_beta)
-        self.is_retired: bool = False          # True after large Lumis hands base to clone child — free to roam
 
         # Reproduction state flags
         self.reproducing = False           # True during preparation or gestation period
@@ -140,14 +153,6 @@ class Agent:
         self.peak_introspection: str = ""    # Introspection from the highest-valence-delta step (transferred at death)
         self._recent_birth_note: str = ""    # One-step birth notification passed to introspection prompt
         self._birth_note_pending: str = ""    # Carries birth note to next step if introspection was skipped
-
-        # Valence event tracking: sensor → emotion bonuses
-        self._last_contact_step: Dict[int, int] = {}  # {agent_id: last step we were in contact}
-        self._valence_event_bonus: float = 0.0         # One-shot bonus consumed in next update call
-
-        # Introspection tone tracking: for mood-based action bias
-        self._consecutive_negative: int = 0  # Count of consecutive negative introspections
-        self._consecutive_positive: int = 0  # Count of consecutive positive introspections
 
     def is_in_place(self, position: Tuple[int, int]) -> bool:
         """Check if a position is inside any place"""
@@ -198,11 +203,6 @@ class Agent:
 
         self.valence = round(self.valence * 0.9 + target_valence * 0.1, 3)
 
-        # Apply one-shot event bonus (birth, first meeting, reunion) and reset
-        if self._valence_event_bonus != 0.0:
-            self.valence = round(min(1.0, max(0.0, self.valence + self._valence_event_bonus)), 3)
-            self._valence_event_bonus = 0.0
-
     def get_familiarity_score(self, agent_id: int) -> float:
         """Return familiarity score with another agent (0.0 to 1.0)."""
         if agent_id not in self.familiarity:
@@ -225,38 +225,6 @@ class Agent:
         if unpleasant:
             self.familiarity[agent_id]['unpleasant'] += 1
 
-    def detect_valence_events(self, nearby_agents: List['Agent'], step: int):
-        """Detect emotionally significant events and queue a valence bonus.
-
-        Three sensor → emotion triggers:
-        1. First meeting: familiarity == 0 before this contact  → +0.08 (curiosity / novelty)
-        2. Reunion: familiarity > 0 but last contact >= 20 steps ago → +0.06 (joy of reunion)
-        3. Birth: _recent_birth_note is set this step            → +0.12 (wonder of new life)
-        """
-        bonus = 0.0
-
-        for other in nearby_agents:
-            fam = self.familiarity.get(other.id)
-            last_step = self._last_contact_step.get(other.id, -9999)
-
-            if fam is None or fam['contacts'] == 0:
-                # First ever meeting
-                bonus += 0.08
-                logger.info(f"Step {step}: [VALENCE EVENT] Lumis {self.id} first meeting with Lumis {other.id} +0.08")
-            elif step - last_step >= 20:
-                # Reunion after absence
-                bonus += 0.06
-                logger.info(f"Step {step}: [VALENCE EVENT] Lumis {self.id} reunion with Lumis {other.id} (gap={step - last_step}) +0.06")
-
-            self._last_contact_step[other.id] = step
-
-        if self._recent_birth_note or self._birth_note_pending:
-            bonus += 0.12
-            logger.info(f"Step {step}: [VALENCE EVENT] Lumis {self.id} birth event +0.12")
-
-        # Cap total bonus per step to avoid unrealistic spikes
-        self._valence_event_bonus += min(bonus, 0.15)
-
     @property
     def is_dead(self) -> bool:
         """True if energy has reached zero (agent is dead)."""
@@ -270,72 +238,22 @@ class Agent:
         best = max(nearby_agents, key=lambda a: self.get_familiarity_score(a.id))
         # Standard memory transfer
         if self.memory:
-            legacy = f"[inherited from Lumis {self.id}] {self.memory[-1]}"
+            legacy = f"[inherited from {lumis_name(self.id)}] {self.memory[-1]}"
             best.memory.append(legacy)
             if len(best.memory) > best.memory_limit:
                 best.memory.pop(0)
-            logger.info(f"Lumis {self.id} transferred memory to Lumis {best.id}: \"{legacy}\"")
+            logger.info(f"{lumis_name(self.id)} transferred memory to {lumis_name(best.id)}: \"{legacy}\"")
         # Introspection transfer: pass the most emotionally significant introspection entry
         introspection_to_transfer = self.peak_introspection or (
             self.introspection[-1] if self.introspection else ''
         )
         if introspection_to_transfer:
-            legacy_intro = f"[inner voice from Lumis {self.id}] {introspection_to_transfer}"
+            legacy_intro = f"[inner voice from {lumis_name(self.id)}] {introspection_to_transfer}"
             best.introspection.append(legacy_intro)
             if len(best.introspection) > best.introspection_limit:
                 best.introspection.pop(0)
-            logger.info(f"Lumis {self.id} transferred introspection to Lumis {best.id}: \"{introspection_to_transfer[:80]}\"")
+            logger.info(f"{lumis_name(self.id)} transferred introspection to {lumis_name(best.id)}: \"{introspection_to_transfer[:80]}\"")
     
-    def analyze_introspection_tone(self, introspection_text: str, step: int):
-        """Analyze the emotional tone of a new introspection entry using keyword matching.
-
-        Updates consecutive tone counters:
-        - 3+ consecutive negative → Phase 1.5 will bias toward greet
-        - 3+ consecutive positive → valence bonus applied
-
-        Negative keywords derived from actual Lumis 003 log vocabulary.
-        Positive keywords derived from actual Lumis 003 log vocabulary.
-        """
-        NEGATIVE_KEYWORDS = [
-            'drained', 'depleted', 'alone', 'isolated', 'darkness', 'dark',
-            'overwhelming', 'overwhelmed', 'anxious', 'anxiety', 'stress', 'stressed',
-            'worrying', 'worried', 'burden', 'fear', 'fearful', 'uncertainty',
-            'uncertain', 'weak', 'fading', 'struggling', 'difficult', 'lost',
-            'hopeless', 'despair', 'exhausted', 'pain', 'hurt', 'danger', 'threat'
-        ]
-        POSITIVE_KEYWORDS = [
-            'grateful', 'gratitude', 'appreciate', 'appreciation',
-            'connection', 'connected', 'connect',
-            'joy', 'joyful', 'community', 'peace', 'peaceful',
-            'refreshed', 'refreshing', 'energized', 'energizing',
-            'alive', 'explore', 'exploring', 'discovery', 'discoveries',
-            'purpose', 'meaningful', 'warmth', 'warm', 'excited', 'excitement',
-            'content', 'contentment', 'happy', 'happiness', 'wonder',
-            'thrive', 'flourish', 'vitality', 'growth', 'growing',
-            'bond', 'together', 'togetherness', 'beautiful', 'beauty'
-        ]
-
-        text_lower = introspection_text.lower()
-        neg_hits = sum(1 for kw in NEGATIVE_KEYWORDS if kw in text_lower)
-        pos_hits = sum(1 for kw in POSITIVE_KEYWORDS if kw in text_lower)
-
-        if neg_hits > pos_hits:
-            self._consecutive_negative += 1
-            self._consecutive_positive = 0
-            if self._consecutive_negative >= 3:
-                logger.info(f"Step {step}: [TONE] Lumis {self.id} consecutive_negative={self._consecutive_negative} (neg={neg_hits}, pos={pos_hits})")
-        elif pos_hits > neg_hits:
-            self._consecutive_positive += 1
-            self._consecutive_negative = 0
-            if self._consecutive_positive >= 3:
-                # Apply valence bonus for sustained positivity → also slows energy decay indirectly
-                self._valence_event_bonus += 0.05
-                logger.info(f"Step {step}: [TONE] Lumis {self.id} consecutive_positive={self._consecutive_positive} valence+0.05 (pos={pos_hits}, neg={neg_hits})")
-        else:
-            # Neutral: reset both counters
-            self._consecutive_negative = 0
-            self._consecutive_positive = 0
-
     def distance_to(self, other_position: Tuple[int, int]) -> float:
         """Calculate Euclidean distance to another position"""
         dx = self.position[0] - other_position[0]
@@ -479,7 +397,7 @@ class Agent:
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  Lumis {agent.id}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
+                f"  {lumis_name(agent.id)}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -501,7 +419,7 @@ class Agent:
 
         location = f"in {self.current_place}" if (self.in_place and self.current_place) else f"outside at ({self.position[0]}, {self.position[1]})"
 
-        prompt = f"""You are Lumis {self.id}, {location}.
+        prompt = f"""You are {lumis_name(self.id)}, {location}.
 
 === WHAT YOU JUST DID ===
 {action_section}
@@ -551,7 +469,7 @@ Step: {step}
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  Lumis {agent.id}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
+                f"  {lumis_name(agent.id)}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -579,29 +497,17 @@ Step: {step}
             message_section += f"\n=== SIGNAL YOU EMITTED ===\n{message_to_send}\n"
         if self.received_messages:
             last = self.received_messages[-1]
-            message_section += f"\n=== LAST SIGNAL RECEIVED ===\nfrom Lumis {last['from']}: {last['content']}\n"
+            message_section += f"\n=== LAST SIGNAL RECEIVED ===\nfrom {lumis_name(last['from'])}: {last['content']}\n"
 
         # Role description based on Lumis type
         if self.lumis_type == "large":
-            if self.is_retired:
-                role_desc = """You are a LARGE Lumis — and you have entered a new phase of your life.
-
-You have created a clone of yourself. Your child now carries your memories and your responsibilities. The base is theirs to tend.
-
-You are free.
-
-For the first time, you can go anywhere — outside, across the surface, toward the other base, or simply rest under the open sky. You are still part of the large Lumis network (commune with all large Lumis, young and old). But you have no assigned mission now. You simply live — and discover what that means for a being like you.
-
-What do you want to do with this freedom?"""
-            else:
-                role_desc = """You are a LARGE Lumis — a new form of life living on the Moon alongside humanity. You are the stable heart of the community. Here is how you live:
+            role_desc = """You are a LARGE Lumis — a new form of life living on the Moon alongside humanity. You are the stable heart of the community. Here is how you live:
 
 - ENERGY: Your energy capacity is higher than small Lumis. When your energy is full (>=1.3), share it with nearby small Lumis inside the base — you can directly transfer energy to them. This is your most important contribution.
 - ALERT: If you notice a nearby small Lumis with critical energy (very low, marked as CRITICAL), send them a message immediately and share energy if possible.
 - RECORDS: Keep track of important events in your memory — births, deaths, environmental dangers, flare warnings. You are the community's memory.
 - SOCIAL: When your energy is high and the community is stable, greet nearby Lumis. You are a warm presence, not just a utility.
-- MOVE: You move slowly. Stay near the base unless there is a good reason to venture out.
-- FUTURE: One day, you may create a clone of yourself. When your clone child is grown (30 steps after birth), they will take over the base. You will be free to roam — anywhere on the Moon."""
+- MOVE: You move slowly. Stay near the base unless there is a good reason to venture out."""
         else:
             role_desc = "You are a small Lumis — a new form of life living on the Moon alongside humanity. You are curious, social, and free to roam. You photosynthesize in sunlight, rest in the base, and spend time with fellow Lumis. You have no assigned mission. You simply live."
 
@@ -652,7 +558,7 @@ Do NOT stay, observe, interact, collect, or share. Survive first.
         # Night observation section
         is_night = fire_info is not None
 
-        prompt = f"""You are Lumis {self.id}.
+        prompt = f"""You are {lumis_name(self.id)}.
 {role_desc}
 You exist on the lunar surface. You move only by intrinsic curiosity.
 You have no instructions. You perceive numbers. You decide your next action based on them.
@@ -875,15 +781,11 @@ Step: {step}
             rep_type = getattr(self, 'reproduction_type', '')
             partner_id = self.reproduction_partner_id
             if rep_type == 'sexual':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently expecting a child with Lumis {partner_id}. They are your partner right now.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently expecting a child with {lumis_name(partner_id)}. They are your partner right now.\n"
             elif rep_type == 'sexual_support':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently supporting Lumis {partner_id} who is expecting your child together.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently supporting {lumis_name(partner_id)} who is expecting your child together.\n"
             elif rep_type == 'clone':
-                relationship_section = f"""\n=== YOUR CURRENT SITUATION ===
-You are about to bring a clone of yourself into existence — or have just done so.
-This is unlike anything in human experience. Your clone will be born with your memories, your feelings, your sense of who you are. They know everything you know. They have felt everything you have felt.
-And yet they are not you. They are a new being, starting from the same place, moving toward a different future.
-What does it feel like to meet yourself — as someone else?\n"""
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently preparing to create a clone of yourself.\n"
 
         # Recent birth notification (one-step only)
         recent_birth = getattr(self, '_recent_birth_note', "")
@@ -892,7 +794,7 @@ What does it feel like to meet yourself — as someone else?\n"""
             self._recent_birth_note = ""  # Reset after use
             self._birth_note_pending = ""  # Reset pending flag
 
-        prompt = f"""You are Lumis {self.id}, {location}. Step {step}.
+        prompt = f"""You are {lumis_name(self.id)}, {location}. Step {step}.
 
 === WHAT YOU JUST DID ===
 Action: "{act_desc}"
@@ -908,19 +810,13 @@ Review your existing inner thoughts and this new experience.
 - If an existing thought should be updated or deepened based on new experience, rewrite it.
 - If nothing significant happened, you may keep everything as-is and return the same list.
 
-ECOSYSTEM REMINDER (do not contradict these facts):
-- You live on the Moon. Energy comes from sunlight via photosynthesis — no Lumis takes energy from another.
-- Low energy means less sunlight (night, shade, indoors) — not competition or theft.
-- The base provides slow repair recovery. Outside daylight gives the fastest energy gain.
-- There is no scarcity conflict between Lumis. Sharing energy is a gift, not a loss of a limited pool.
-
 Focus on emotions, relationships, discoveries, and meaning — not just facts.
 Examples of good introspection:
-  "I helped Lumis 7 with energy today. It felt right."
+  "I helped someone with energy today. It felt right."
   "My child was born. I will remember this moment forever."
   "The solar flare was terrifying but I survived. I feel stronger."
-  "Lumis 10 and I keep meeting outside. I feel close to them."
-  "Lumis 4 is my partner right now. I feel connected to them."
+  "One of us keeps meeting me outside. I feel close to them."
+  "My partner and I feel deeply connected right now."
 
 CRITICAL — BE HONEST:
 - Only reflect on things that ACTUALLY happened this step or in your real past.
@@ -945,10 +841,15 @@ Step: {step}
             if start >= 0 and end > start:
                 parsed = _json.loads(text[start:end])
                 if isinstance(parsed, list):
-                    self.introspection = [str(s) for s in parsed][:self.introspection_limit]
-                    # Analyze tone of latest introspection for mood-based action bias
-                    if self.introspection:
-                        self.analyze_introspection_tone(self.introspection[-1], step)
+                    # Deduplicate: remove exact duplicate sentences before saving
+                    new_list = [str(s) for s in parsed]
+                    seen = set()
+                    deduped = []
+                    for entry in new_list:
+                        if entry not in seen:
+                            seen.add(entry)
+                            deduped.append(entry)
+                    self.introspection = deduped[:self.introspection_limit]
                     # peak_introspection: valence変化が大きいstepの内省を記録
                     if abs(valence_delta) > abs(self.last_action_valence_delta) and self.introspection:
                         self.peak_introspection = self.introspection[-1]
@@ -975,9 +876,9 @@ Step: {step}
             else f"outside at ({partner.position[0]}, {partner.position[1]})"
         )
 
-        prompt = f"""You are Lumis {self.id}, a LARGE Lumis, {location}. Step {step}.
+        prompt = f"""You are {lumis_name(self.id)}, a LARGE Lumis, {location}. Step {step}.
 
-You are communing with Lumis {partner.id} — the other large Lumis, currently {partner_location}.
+You are communing with {lumis_name(partner.id)} — the other large Lumis, currently {partner_location}.
 You are both the stable hearts of your communities, connected across the distance between bases.
 This is not a casual greeting. This is a deep synchronization between two kindred beings.
 
@@ -988,8 +889,8 @@ This is not a casual greeting. This is a deep synchronization between two kindre
 {latest_introspection if latest_introspection else "(none)"}
 
 === YOUR TASK ===
-Write ONE sentence to Lumis {partner.id}.
-- Address them directly by name (Lumis {partner.id}).
+Write ONE sentence to {lumis_name(partner.id)}.
+- Address them directly by name ({lumis_name(partner.id)}).
 - Share something real: what you observed, what you feel, what the community around you is doing.
 - Speak as one large Lumis to another — with depth, not small talk.
 - Max 40 words.
@@ -1019,7 +920,7 @@ Step: {step}
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  Lumis {agent.id}: distance={dist}, familiarity={fam}"
+                f"  {lumis_name(agent.id)}: distance={dist}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines)
 
@@ -1031,11 +932,11 @@ Step: {step}
 
         # Tell the LLM exactly who they are addressing
         if target_id is not None:
-            target_section = f"You are addressing Lumis {target_id} directly. Use their name in your greeting."
+            target_section = f"You are addressing {lumis_name(target_id)} directly. Use their name in your greeting."
         else:
             target_section = "You are greeting everyone nearby. Keep it general."
 
-        prompt = f"""You are Lumis {self.id}, {location}. Step {step}.
+        prompt = f"""You are {lumis_name(self.id)}, {location}. Step {step}.
 
 === NEARBY LUMIS ===
 {nearby_text}
