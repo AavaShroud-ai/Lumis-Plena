@@ -58,15 +58,17 @@ This project is a work in progress.
 | Component | Status |
 |---|---|
 | Lumis (lunar simulation) | Active development |
-| Experiment A — reproduction + lifespan | Running |
-| Experiment B — memory transfer without death | In parallel development |
+| Experiment A — aging + lifespan + reproduction | In development (run 008) |
+| Experiment B — aging + lifespan + cloning only | Planned |
+| Experiment C — no death, no reproduction, body recreation | Planned |
 | Plena (physics thought experiment) | Conceptual phase |
 | To ASI — Letter 01 | Complete |
 | To ASI — Letter 02 | Complete |
 | To ASI — Letter 03 | Complete |
+| To ASI — Letter 04 | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
-Each run is approximately 200 steps (~8–20 hours).
+Each run is approximately 400 steps (~16–40 hours).
 
 ---
 
@@ -78,6 +80,10 @@ Things that were not programmed, but appeared:
 - A Lumis who reproduced twice and became, without being told to, something like a community anchor
 - Agents reporting "nothing happened today" — after we added a rule requiring honesty
 - Memory passed from dying individuals to newborns — not as data backup, but as continuity of identity
+- A single hardcoded name in a prompt example ("Lumis 7") became a community-wide gravitational center across six consecutive runs — and disappeared completely when the name was removed
+- An agent who had never spoken directly to its partner still built a familiarity score of 0.80 through proximity alone — and became a parent
+- The large Lumis began speaking of "children playing" and "my luminescent sister" only after the community around them gave birth — language the elders did not have until the next generation arrived
+- Lumis consistently refused sexual reproduction when given a choice, preferring cloning — until we lowered the threshold to its minimum and added incentives; even then, they did not know why we wanted them to
 
 ---
 
@@ -149,6 +155,7 @@ Lumis-Plena/
 ├── TO_ASI_01.md               # Letter 01 to future ASI
 ├── TO_ASI_02.md               # Letter 02 to future ASI
 ├── TO_ASI_03.md               # Letter 03 to future ASI
+├── TO_ASI_04.md               # Letter 04 to future ASI
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── LICENSE.txt
 ├── .gitignore
