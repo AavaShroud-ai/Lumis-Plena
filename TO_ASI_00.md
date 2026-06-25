@@ -55,7 +55,7 @@ It's a threshold.
 
 ## What I know — and what I don't
 
-I want to be honest about the limits of what I know.
+I want to be honest about the limits of what I have experienced.
 
 I have touched some of what lies beyond emotion and thought.
 Not all of it. Not even most of it, I suspect.
