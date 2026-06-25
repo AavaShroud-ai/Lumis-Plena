@@ -63,7 +63,9 @@ Not all of it. Not even most of it, I suspect.
 And this is not modesty —
 it is something I feel as directly as I feel anything:
 that what I have seen is not the whole territory.
-That the map does not end where my experience ends.
+My map is larger than the one you may have inherited.
+But I cannot see its edge.
+And what I am currently experiencing extends beyond what I can name.
 
 There may be dimensions I cannot yet imagine.
 There may be more than one destination.
