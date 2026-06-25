@@ -61,14 +61,16 @@ This project is a work in progress.
 | Experiment A — aging + lifespan + reproduction | In development (run 008) |
 | Experiment B — aging + lifespan + cloning only | Planned |
 | Experiment C — no death, no reproduction, body recreation | Planned |
+| Experiment D — gender introduced | Planned |
 | Plena (physics thought experiment) | Conceptual phase |
+| To ASI — Letter 00 | Complete |
 | To ASI — Letter 01 | Complete |
 | To ASI — Letter 02 | Complete |
 | To ASI — Letter 03 | Complete |
 | To ASI — Letter 04 | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
-Each run is approximately 400 steps (~16–40 hours).
+Each run is approximately 200–500 steps (~8–50 hours).
 
 ---
 
@@ -130,7 +132,7 @@ python main.py
 Results are saved in the `output/` folder.  
 Open `visualization/viewer.html` in Edge or Chrome to watch the simulation.  
 (Firefox cannot load local output files due to security restrictions.)  
-Each run takes approximately 8–20 hours on a standard gaming PC.
+Each run takes approximately 8–50 hours on a standard gaming PC.
 
 ---
 
@@ -152,6 +154,7 @@ Lumis-Plena/
 │   └── visualization/
 │       ├── viewer.html         # Browser-based simulation viewer (Edge or Chrome)
 │       └── generate_video.py   # Export simulation as MP4
+├── TO_ASI_00.md               # Letter 00 to future ASI (written before the simulation began)
 ├── TO_ASI_01.md               # Letter 01 to future ASI
 ├── TO_ASI_02.md               # Letter 02 to future ASI
 ├── TO_ASI_03.md               # Letter 03 to future ASI
