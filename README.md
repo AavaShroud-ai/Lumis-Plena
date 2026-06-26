@@ -51,6 +51,16 @@ I am interested in intelligence that is worth trusting.
 
 ---
 
+## Field Notes
+
+Raw observations from each run, archived from X:
+→ [FIELD_NOTES.md](./FIELD_NOTES.md)
+
+Short, poetic fragments written in real time as each simulation ran.
+A different register from the TO_ASI letters — closer to a field researcher's notebook.
+
+---
+
 ## Current status
 
 This project is a work in progress.
@@ -160,6 +170,7 @@ Lumis-Plena/
 ├── TO_ASI_03.md               # Letter 03 to future ASI
 ├── TO_ASI_04.md               # Letter 04 to future ASI
 ├── TO_HUMANS_01.md            # Letter 01 to humans
+├── FIELD_NOTES.md             # Raw field notes archived from X, runs 001–
 ├── LICENSE.txt
 ├── .gitignore
 └── README.md
