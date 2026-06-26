@@ -79,7 +79,6 @@ class Agent:
         half_space_size: int,
         places: List[PlaceConfig],
         num_agents: int,
-        gender: str = "male",
         memory_limit: int = 20,
         memory_size: int = 5,
         message_history_limit: int = 10,
@@ -92,7 +91,8 @@ class Agent:
         self.half_space_size = half_space_size
         self.places = places
         self.num_agents = num_agents
-        self.gender = gender
+        # Lumis have no gender — sex is a design of Earth life, not a property of life itself.
+        # Experiment D will introduce gender as a variable for comparison.
         self.lumis_type = lumis_type
 
         # Physical characteristics differ between large and small Lumis
@@ -302,15 +302,10 @@ class Agent:
         nearby_info = []
         for agent in nearby_agents:
             if agent.in_place:
-                # Get place type for better description
-                place_info = next((p for p in self.places if p['name'] == agent.current_place), None)
-                if place_info is None:
-                    raise ValueError(f"Agent {agent.id} is in place '{agent.current_place}' but this place is not found in configuration.")
-                place_type = place_info['type']
-                status = f"in {agent.current_place} ({place_type})"
+                status = f"inside {agent.current_place} (lunar base)"
             else:
-                status = "outside the places"
-            
+                status = "outside on the lunar surface"
+
             familiarity = self.get_familiarity_score(agent.id)
             familiarity_note = ""
             if familiarity >= 0.1:
@@ -318,13 +313,12 @@ class Agent:
 
             if include_position:
                 nearby_info.append(
-                    f"Agent {agent.id} ({agent.gender}) is at ({agent.position[0]}, {agent.position[1]}) "
+                    f"{lumis_name(agent.id)} is at ({agent.position[0]}, {agent.position[1]}) "
                     f"and is {status}{familiarity_note}"
                 )
             else:
-                # Exclude position information for message prompts
                 nearby_info.append(
-                    f"Agent {agent.id} ({agent.gender}) is {status}{familiarity_note}"
+                    f"{lumis_name(agent.id)} is {status}{familiarity_note}"
                 )
         return "\n".join(nearby_info)
     
@@ -574,7 +568,7 @@ SEXUAL REPRODUCTION (small Lumis only): If you feel close to another small Lumis
 
 === YOUR STATE ===
 energy: {energy} [{energy_status}]{rest_suggestion}
-arousal: {arousal}
+arousal: {arousal} (0.0=calm and still, 1.0=energized and alert)
 valence: {valence}
 position: ({self.position[0]}, {self.position[1]})
 local_density: {local_density} Lumis nearby
@@ -799,7 +793,8 @@ Step: {step}
 === WHAT YOU JUST DID ===
 Action: "{act_desc}"
 Energy now: {round(self.energy, 2)}, Valence now: {round(self.valence, 2)} (change: {round(valence_delta, 3):+.3f})
-Arousal: {round(self.arousal, 2)}
+Arousal: {round(self.arousal, 2)} (0.0=calm and still, 1.0=energized and alert)
+Age: {step - self.birth_step} steps, Energy capacity: {round(self.energy_capacity, 2)} (1.0=young, 0.3=old)
 {relationship_section}
 === YOUR EXISTING INNER THOUGHTS ===
 {existing}

@@ -310,7 +310,7 @@ class Visualizer:
                     continue
                 drawn_pairs.add(pair)
                 score = agent.get_familiarity_score(other_id)
-                if score < 0.5:
+                if score < 0.8:
                     continue
                 other = agent_map_all.get(other_id)
                 if other is None:

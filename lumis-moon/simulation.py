@@ -486,6 +486,34 @@ class Simulation:
         # Large Lumis during child-rearing: restrict movement outside base
         # Movement is handled within Phase 2
 
+        # === AGING SYSTEM (Experiment A-008) ===
+        # Lifespan: small=300 steps, large=600 steps
+        LIFESPAN_SMALL = 300
+        LIFESPAN_LARGE = 600
+        # Aging: energy_capacity declines after 200 steps (small) / 400 steps (large)
+        AGING_START_SMALL = 200
+        AGING_START_LARGE = 400
+        for agent in self.agents:
+            age = self.step - agent.birth_step
+            if agent.lumis_type == "small":
+                lifespan = LIFESPAN_SMALL
+                aging_start = AGING_START_SMALL
+            else:
+                lifespan = LIFESPAN_LARGE
+                aging_start = AGING_START_LARGE
+            # Energy efficiency declines from 1.0 to 0.3 during aging period
+            if age >= aging_start:
+                aging_progress = min(1.0, (age - aging_start) / (lifespan - aging_start))
+                new_capacity = agent.energy_capacity * (1.0 - aging_progress * 0.7)
+                new_capacity = max(0.3 * (1.5 if agent.lumis_type == "large" else 1.0), new_capacity)
+                agent.energy_capacity = new_capacity
+                # Cap current energy to new capacity
+                agent.energy = min(agent.energy, agent.energy_capacity)
+            # Fixed lifespan: force death at max age
+            if age >= lifespan:
+                agent.energy = 0.0
+                logger.info(f"Step {self.step}: Lumis {agent.id} ({agent.lumis_type}) reached end of lifespan (age={age}).")
+
         # Death processing: remove agents with energy <= 0 (before message phase)
         dead_agents = [a for a in self.agents if a.is_dead]
         for dead in dead_agents:
