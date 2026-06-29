@@ -365,7 +365,7 @@ class Visualizer:
             elif getattr(agent, 'parent_ids', []) and (current_step - agent.birth_step) <= 30:
                 # Newborn check: MUST come before in_place to override cyan
                 if len(agent.parent_ids) == 2:
-                    color = '#e8c8ff'      # Light purple: newborn from sexual reproduction
+                    color = '#e8c8ff'      # Light purple: newborn from two-parent reproduction
                     edge_color = '#d4a0ff'
                 else:
                     color = '#ffd6e0'      # Light pink: newborn from clone
@@ -556,7 +556,7 @@ class Visualizer:
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#6600cc', markersize=8, label='Sexual parent'),
             
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ffd6e0', markersize=8, label='Newborn (clone)'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#e8c8ff', markersize=8, label='Newborn (sexual)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#e8c8ff', markersize=8, label='Newborn (two-parent)'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#aaff00', markersize=8, label='Low energy'),
             Line2D([0], [0], marker='o', color='w', markerfacecolor='#ff4444', markersize=8, label='Critical energy'),
             Line2D([0], [0], color='#00ffaa', linewidth=2, alpha=0.6, label='Familiarity bond'),
