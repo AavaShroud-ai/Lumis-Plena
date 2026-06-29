@@ -8,11 +8,11 @@ simulation:
   
 # Agent Parameters
 agents:
-  num_agents: 12
-  num_large: 2        # Large Lumis (energy supply and communication relay)
+  num_agents: 14
+  num_large: 4        # Large Lumis: 2 per base (base_alpha: L0+L2, base_beta: L1+L3)
   num_small: 10       # Small Lumis (observation and exploration)
-  # Note: reduced from 20 to 12 (run 009+) to control population explosion
-  # and allow 3-generation observation within 500 steps
+  # Note: reduced from 20 to 12 (run 008), now 14 with 4 large (run 009+)
+  # Large increased to 4 to solve L1 loneliness problem (structural asymmetry)
   communication_radius: 5  # Radius for agent communication
   memory_limit: 20  # Maximum number of memory entries to store
   memory_size: 5  # Number of recent memory entries used in LLM prompt

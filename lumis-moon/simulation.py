@@ -494,6 +494,8 @@ class Simulation:
         AGING_START_SMALL = 200
         AGING_START_LARGE = 400
         for agent in self.agents:
+            if agent.energy <= 0.0:
+                continue  # すでに死亡済みはスキップ
             age = self.step - agent.birth_step
             if agent.lumis_type == "small":
                 lifespan = LIFESPAN_SMALL
@@ -510,9 +512,10 @@ class Simulation:
                 # Cap current energy to new capacity
                 agent.energy = min(agent.energy, agent.energy_capacity)
             # Fixed lifespan: force death at max age
-            if age >= lifespan:
+            if age >= lifespan and agent.energy > 0.0:
                 agent.energy = 0.0
-                logger.info(f"Step {self.step}: Lumis {agent.id} ({agent.lumis_type}) reached end of lifespan (age={age}).")
+                agent.energy_capacity = 0.0  # 完全に枯渇
+                logger.info(f"Step {self.step}: {lumis_name(agent.id)} ({agent.lumis_type}) reached end of lifespan (age={age}).")
 
         # Death processing: remove agents with energy <= 0 (before message phase)
         dead_agents = [a for a in self.agents if a.is_dead]
@@ -911,32 +914,46 @@ class Simulation:
         # - Small Lumis: no message if no nearby agents.
         # - Message = auto-generated header + latest introspection + greeting (LLM).
 
-        # Large Lumis commune with each other every step
+        # Large Lumis commune:
+        # - 基地内（同じbase）: 毎step
+        # - 基地間（異なるbase）: 30stepごと
         large_agents = [a for a in self.agents if a.lumis_type == 'large']
-        if len(large_agents) == 2:
-            for i, agent in enumerate(large_agents):
-                partner = large_agents[1 - i]
-                action_taken = action_decision_map.get(agent.id)
-                latest_intro = introspection_map.get(agent.id, "")
-                commune_text = agent.decide_commune(partner, self.step, action_taken, latest_intro)
-                if commune_text:
-                    act = action_taken.get('action', 'stay') if action_taken else 'stay'
-                    location = (
-                        f"in {agent.current_place}" if (agent.in_place and agent.current_place)
-                        else f"({agent.position[0]}, {agent.position[1]})"
-                    )
-                    header = f"[Step {self.step}, {location}, energy={round(agent.energy, 2)}, action={act}]"
-                    message_content = f"{header} {commune_text}"
-                    partner.receive_message(agent.id, message_content, step=self.step)
-                    self._log_message(
-                        from_agent_id=agent.id,
-                        to_agent_id=partner.id,
-                        message=message_content,
-                        reasoning=commune_text
-                    )
-                    logger.info(
-                        f"Step {self.step}: [COMMUNE] {lumis_name(agent.id)} to {lumis_name(partner.id)}: {commune_text[:80]}"
-                    )
+        communed_pairs = set()
+        for agent in large_agents:
+            for partner in large_agents:
+                if agent.id >= partner.id:
+                    continue
+                pair_key = (min(agent.id, partner.id), max(agent.id, partner.id))
+                if pair_key in communed_pairs:
+                    continue
+                # 同じ基地かどうか判定
+                same_base = (agent.home_base == partner.home_base)
+                # 基地内：毎step、基地間：30stepごと
+                if same_base or (self.step % 30 == 0):
+                    communed_pairs.add(pair_key)
+                    for sender, receiver in [(agent, partner), (partner, agent)]:
+                        action_taken = action_decision_map.get(sender.id)
+                        latest_intro = introspection_map.get(sender.id, "")
+                        commune_text = sender.decide_commune(receiver, self.step, action_taken, latest_intro)
+                        if commune_text:
+                            act = action_taken.get('action', 'stay') if action_taken else 'stay'
+                            location = (
+                                f"in {sender.current_place}" if (sender.in_place and sender.current_place)
+                                else f"({sender.position[0]}, {sender.position[1]})"
+                            )
+                            commune_type = "COMMUNE_INTRA" if same_base else "COMMUNE_INTER"
+                            header = f"[Step {self.step}, {location}, energy={round(sender.energy, 2)}, action={act}]"
+                            message_content = f"{header} {commune_text}"
+                            receiver.receive_message(sender.id, message_content, step=self.step)
+                            self._log_message(
+                                from_agent_id=sender.id,
+                                to_agent_id=receiver.id,
+                                message=message_content,
+                                reasoning=commune_text
+                            )
+                            logger.info(
+                                f"Step {self.step}: [{commune_type}] {lumis_name(sender.id)} to {lumis_name(receiver.id)}: {commune_text[:80]}"
+                            )
 
         for agent in self.agents:
             nearby_agents = agent.get_nearby_agents(self.agents)
@@ -1203,6 +1220,7 @@ class Simulation:
                         and (self.step - a.birth_step) >= MATURITY_SMALL
                         and (self.step - a.last_reproduction_step) >= SEXUAL_COOLDOWN
                         and not getattr(a, 'is_sheltering', False)
+                        and a.sexual_count < 1  # supporting側も1回まで
                     ]
                     if nearby:
                         partner = max(nearby, key=lambda a: agent.get_familiarity_score(a.id))

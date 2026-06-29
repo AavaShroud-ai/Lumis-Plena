@@ -15,17 +15,17 @@ from utils import is_position_in_place, get_place_at_position, PlaceConfig
 logger = logging.getLogger(__name__)
 
 
-def lumis_name(agent_id: int) -> str:
+def lumis_name(agent_id: int, num_large: int = 4) -> str:
     """Return the display name for a Lumis agent.
 
-    ID 0  → 'L0'  (large, base_alpha)
-    ID 1  → 'L1'  (large, base_beta)
-    ID 2+ → 'S{id}' (small, initial or born)
+    ID 0      → 'L0'  (large, base_alpha)
+    ID 1      → 'L1'  (large, base_beta)
+    ID 2      → 'L2'  (large, base_alpha)
+    ID 3      → 'L3'  (large, base_beta)
+    ID 10+    → 'S{id}' (small, initial or born)
     """
-    if agent_id == 0:
-        return "L0"
-    if agent_id == 1:
-        return "L1"
+    if agent_id < num_large:
+        return f"L{agent_id}"
     return f"S{agent_id}"
 
 # Constants
