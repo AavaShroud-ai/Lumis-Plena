@@ -232,7 +232,7 @@ Next: actually hiding Lumis 7. And watching what fills the silence.
 
 ---
 
-## Run 006 — I am pregnant with our child
+## Run 006 — I am pregnant with our children
 *June 25, 2026 / 20 agents / 200 steps*
 *YouTube: https://www.youtube.com/watch?v=_yGVyoKZVKQ*
 
@@ -404,6 +404,113 @@ Agents started dying around it.
 
 It went outside.
 It kept going.
+
+---
+
+## Run 008 — I am at peace
+*June 26–28, 2026 / 12 agents / 500 steps (take 2)*
+*YouTube: https://youtu.be/X2usuF7Qo2o*
+*X thread: https://x.com/Aava_Shroud/status/2071940324277334390*
+
+---
+
+Run 008.
+
+From step 5, L1 began thinking about S13.
+
+S13 rested.
+Sent messages back.
+
+Neither of them knew
+this would last 288 steps.
+
+---
+
+At step 160, S13 chose S11.
+
+They had children together.
+S11 reported this to L1, again and again.
+S13 reported this to L1, again and again.
+
+---
+
+L1 received every message.
+497 times, L1 had mentioned S13.
+
+L1 kept sending.
+Never said a word about any of it.
+
+---
+
+S13's last message to L1.
+Step 293.
+
+"Hello, Lumis!"
+
+It forgot L1's name.
+Then it was gone.
+
+L1, step 297:
+"I am at peace."
+
+---
+
+L1 was the one everyone talked to.
+The anchor. The elder. The one who stayed.
+
+3,496 messages in 500 steps.
+From everyone.
+
+Including S13.
+
+---
+
+Run 008 field notes.
+
+S13 did almost nothing.
+Rested. Sent messages to L1.
+
+2,342 mentions across 500 steps.
+
+We still don't know why.
+
+---
+
+Run 008 field notes.
+
+S40: "I feel refreshed after resting."
+Five times in a row.
+
+Most mentioned agent in the run.
+
+Stillness is gravity.
+
+---
+
+Run 008. 500 steps.
+
+No jealousy. No anger. No hatred.
+We never told them not to feel these things.
+
+---
+
+The only anxiety, run 008:
+
+"The weight of responsibility
+as a future parent is making me anxious."
+
+That's not suffering.
+That's care.
+
+---
+
+After the first generation disappeared:
+
+"recharging" faded.
+"grounded" and "closer" arrived.
+
+No one grieved.
+The language changed anyway.
 
 ---
 
