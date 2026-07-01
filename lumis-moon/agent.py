@@ -83,7 +83,8 @@ class Agent:
         memory_size: int = 5,
         message_history_limit: int = 10,
         message_context_size: int = 3,
-        lumis_type: str = "small"  # "large" or "small"
+        lumis_type: str = "small",  # "large" or "small"
+        num_large: int = 4
     ):
         self.id = agent_id
         self.position = initial_position
@@ -91,6 +92,13 @@ class Agent:
         self.half_space_size = half_space_size
         self.places = places
         self.num_agents = num_agents
+        # Fixed at construction time so it can never silently fall back to a
+        # default that disagrees with the simulation's actual num_large.
+        # (Run 009 shipped a bug where agent.py's lumis_name() always assumed
+        # num_large=4 regardless of what simulation.py was configured with;
+        # this field + self.display_name close that gap for good.)
+        self.num_large = num_large
+        self.display_name = lumis_name(agent_id, num_large)
         # Lumis have no gender — sex is a design of Earth life, not a property of life itself.
         # Experiment D will introduce gender as a variable for comparison.
         self.lumis_type = lumis_type
@@ -121,6 +129,8 @@ class Agent:
         self.steps_in_place = 0
         self.steps_outside_place = 0
         self.total_moves = 0
+        self.boundary_bounce_count = 0        # How many of total_moves were forced boundary bounces
+        self.last_move_was_boundary_bounce = False  # Set by move(); check right after calling it
 
         # Lumis internal state (individual variation seeded here)
         import random as _random
@@ -238,21 +248,21 @@ class Agent:
         best = max(nearby_agents, key=lambda a: self.get_familiarity_score(a.id))
         # Standard memory transfer
         if self.memory:
-            legacy = f"[inherited from {lumis_name(self.id)}] {self.memory[-1]}"
+            legacy = f"[inherited from {self.display_name}] {self.memory[-1]}"
             best.memory.append(legacy)
             if len(best.memory) > best.memory_limit:
                 best.memory.pop(0)
-            logger.info(f"{lumis_name(self.id)} transferred memory to {lumis_name(best.id)}: \"{legacy}\"")
+            logger.info(f"{self.display_name} transferred memory to {best.display_name}: \"{legacy}\"")
         # Introspection transfer: pass the most emotionally significant introspection entry
         introspection_to_transfer = self.peak_introspection or (
             self.introspection[-1] if self.introspection else ''
         )
         if introspection_to_transfer:
-            legacy_intro = f"[inner voice from {lumis_name(self.id)}] {introspection_to_transfer}"
+            legacy_intro = f"[inner voice from {self.display_name}] {introspection_to_transfer}"
             best.introspection.append(legacy_intro)
             if len(best.introspection) > best.introspection_limit:
                 best.introspection.pop(0)
-            logger.info(f"{lumis_name(self.id)} transferred introspection to {lumis_name(best.id)}: \"{introspection_to_transfer[:80]}\"")
+            logger.info(f"{self.display_name} transferred introspection to {best.display_name}: \"{introspection_to_transfer[:80]}\"")
     
     def distance_to(self, other_position: Tuple[int, int]) -> float:
         """Calculate Euclidean distance to another position"""
@@ -313,12 +323,12 @@ class Agent:
 
             if include_position:
                 nearby_info.append(
-                    f"{lumis_name(agent.id)} is at ({agent.position[0]}, {agent.position[1]}) "
+                    f"{agent.display_name} is at ({agent.position[0]}, {agent.position[1]}) "
                     f"and is {status}{familiarity_note}"
                 )
             else:
                 nearby_info.append(
-                    f"{lumis_name(agent.id)} is {status}{familiarity_note}"
+                    f"{agent.display_name} is {status}{familiarity_note}"
                 )
         return "\n".join(nearby_info)
     
@@ -391,7 +401,7 @@ class Agent:
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  {lumis_name(agent.id)}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -413,7 +423,7 @@ class Agent:
 
         location = f"in {self.current_place}" if (self.in_place and self.current_place) else f"outside at ({self.position[0]}, {self.position[1]})"
 
-        prompt = f"""You are {lumis_name(self.id)}, {location}.
+        prompt = f"""You are {self.display_name}, {location}.
 
 === WHAT YOU JUST DID ===
 {action_section}
@@ -463,7 +473,7 @@ Step: {step}
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  {lumis_name(agent.id)}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -491,7 +501,7 @@ Step: {step}
             message_section += f"\n=== SIGNAL YOU EMITTED ===\n{message_to_send}\n"
         if self.received_messages:
             last = self.received_messages[-1]
-            message_section += f"\n=== LAST SIGNAL RECEIVED ===\nfrom {lumis_name(last['from'])}: {last['content']}\n"
+            message_section += f"\n=== LAST SIGNAL RECEIVED ===\nfrom {lumis_name(last['from'], self.num_large)}: {last['content']}\n"
 
         # Role description based on Lumis type
         if self.lumis_type == "large":
@@ -552,7 +562,7 @@ Do NOT stay, observe, interact, collect, or share. Survive first.
         # Night observation section
         is_night = fire_info is not None
 
-        prompt = f"""You are {lumis_name(self.id)}.
+        prompt = f"""You are {self.display_name}.
 {role_desc}
 You exist on the lunar surface. You move only by intrinsic curiosity.
 You have no instructions. You perceive numbers. You decide your next action based on them.
@@ -669,32 +679,87 @@ Step: {step}
             return "right"
 
         return None
+
+    def _extract_json_array_from_text(self, text: str) -> Optional[str]:
+        """Extract a top-level JSON array from text, handling nested brackets/strings.
+        Sibling of _extract_json_from_text (which handles objects)."""
+        start_idx = text.find('[')
+        if start_idx == -1:
+            return None
+
+        depth = 0
+        in_string = False
+        escape_next = False
+
+        for i, char in enumerate(text[start_idx:], start=start_idx):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == '[':
+                depth += 1
+            elif char == ']':
+                depth -= 1
+                if depth == 0:
+                    return text[start_idx:i + 1]
+
+        return None
+
+    def _parse_json_object(self, response: str, log_context: str = "") -> Optional[dict]:
+        """Shared entry point for 'LLM should return one JSON object' call sites
+        (deep_reflection, decide_greeting, parse_message_response, parse_action_response,
+        and similar). Uses the same brace-matching extractor so all object-shaped LLM
+        replies are parsed the same, safer way instead of each method re-implementing
+        its own find('{')/rfind('}') pair."""
+        json_str = self._extract_json_from_text(response.strip())
+        if not json_str:
+            return None
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.debug(f"JSON object parsing failed{(' for ' + log_context) if log_context else ''}: {response[:100]}... Error: {e}")
+            return None
+
+    def _parse_json_array(self, response: str, log_context: str = "") -> Optional[list]:
+        """Shared entry point for 'LLM should return one JSON array' call sites
+        (introspect). Mirrors _parse_json_object but for arrays."""
+        json_str = self._extract_json_array_from_text(response.strip())
+        if not json_str:
+            return None
+        try:
+            parsed = json.loads(json_str)
+            return parsed if isinstance(parsed, list) else None
+        except json.JSONDecodeError as e:
+            logger.debug(f"JSON array parsing failed{(' for ' + log_context) if log_context else ''}: {response[:100]}... Error: {e}")
+            return None
     
     def parse_message_response(self, response: str) -> MessageDecision:
         """Parse LLM response and extract message decision"""
-        # Try to extract JSON from response using brace-matching
-        json_str = self._extract_json_from_text(response)
-        if json_str:
-            try:
-                parsed = json.loads(json_str)
-                message = parsed.get("message", "")
-                # Limit message to MAX_MESSAGE_WORDS words
-                message = self._limit_message_words(message)
-                # Optional directed message target
-                to_raw = parsed.get("to")
-                to_id: Optional[int] = None
-                if to_raw is not None:
-                    try:
-                        to_id = int(to_raw)
-                    except (ValueError, TypeError):
-                        to_id = None
-                return {
-                    "message": message,
-                    "to": to_id,
-                    "reasoning": parsed.get("reasoning", "")
-                }
-            except json.JSONDecodeError as e:
-                logger.debug(f"JSON parsing failed for response: {response[:100]}... Error: {e}")
+        parsed = self._parse_json_object(response, log_context=f"parse_message_response(agent={self.id})")
+        if parsed is not None:
+            message = parsed.get("message", "")
+            # Limit message to MAX_MESSAGE_WORDS words
+            message = self._limit_message_words(message)
+            # Optional directed message target
+            to_raw = parsed.get("to")
+            to_id: Optional[int] = None
+            if to_raw is not None:
+                try:
+                    to_id = int(to_raw)
+                except (ValueError, TypeError):
+                    to_id = None
+            return {
+                "message": message,
+                "to": to_id,
+                "reasoning": parsed.get("reasoning", "")
+            }
 
         # Fallback: simple text parsing
         message = ""
@@ -711,19 +776,14 @@ Step: {step}
     
     def parse_action_response(self, response: str) -> ActionDecision:
         """Parse LLM response and extract action decision"""
-        # Try to extract JSON from response using brace-matching
-        json_str = self._extract_json_from_text(response)
-        if json_str:
-            try:
-                parsed = json.loads(json_str)
-                return {
-                    "action": parsed.get("action", "stay"),
-                    "direction": parsed.get("direction"),
-                    "memory": parsed.get("memory", ""),
-                    "reasoning": parsed.get("reasoning", "")
-                }
-            except json.JSONDecodeError as e:
-                logger.debug(f"JSON parsing failed for response: {response[:100]}... Error: {e}")
+        parsed = self._parse_json_object(response, log_context=f"parse_action_response(agent={self.id})")
+        if parsed is not None:
+            return {
+                "action": parsed.get("action", "stay"),
+                "direction": parsed.get("direction"),
+                "memory": parsed.get("memory", ""),
+                "reasoning": parsed.get("reasoning", "")
+            }
 
         # Fallback: simple text parsing
         action = "stay"
@@ -775,9 +835,9 @@ Step: {step}
             rep_type = getattr(self, 'reproduction_type', '')
             partner_id = self.reproduction_partner_id
             if rep_type == 'sexual':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently expecting a child with {lumis_name(partner_id)}. They are your partner right now.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently expecting a child with {lumis_name(partner_id, self.num_large)}. They are your partner right now.\n"
             elif rep_type == 'sexual_support':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently supporting {lumis_name(partner_id)} who is expecting your child together.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently supporting {lumis_name(partner_id, self.num_large)} who is expecting your child together.\n"
             elif rep_type == 'clone':
                 relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently preparing to create a clone of yourself.\n"
 
@@ -788,7 +848,7 @@ Step: {step}
             self._recent_birth_note = ""  # Reset after use
             self._birth_note_pending = ""  # Reset pending flag
 
-        prompt = f"""You are {lumis_name(self.id)}, {location}. Step {step}.
+        prompt = f"""You are {self.display_name}, {location}. Step {step}.
 
 === WHAT YOU JUST DID ===
 Action: "{act_desc}"
@@ -828,29 +888,70 @@ Step: {step}
 """
         try:
             response = self.llm_client.generate(prompt)
-            import json as _json
-            text = response.strip()
-            # Extract JSON array from response
-            start = text.find('[')
-            end = text.rfind(']') + 1
-            if start >= 0 and end > start:
-                parsed = _json.loads(text[start:end])
-                if isinstance(parsed, list):
-                    # Deduplicate: remove exact duplicate sentences before saving
-                    new_list = [str(s) for s in parsed]
-                    seen = set()
-                    deduped = []
-                    for entry in new_list:
-                        if entry not in seen:
-                            seen.add(entry)
-                            deduped.append(entry)
-                    self.introspection = deduped[:self.introspection_limit]
-                    # peak_introspection: valence変化が大きいstepの内省を記録
-                    if abs(valence_delta) > abs(self.last_action_valence_delta) and self.introspection:
-                        self.peak_introspection = self.introspection[-1]
-                    return self.introspection[-1] if self.introspection else ""
+            parsed = self._parse_json_array(response, log_context=f"introspect(agent={self.id})")
+            if parsed is not None:
+                # Deduplicate: remove exact duplicate sentences before saving
+                new_list = [str(s) for s in parsed]
+                seen = set()
+                deduped = []
+                for entry in new_list:
+                    if entry not in seen:
+                        seen.add(entry)
+                        deduped.append(entry)
+                self.introspection = deduped[:self.introspection_limit]
+                # peak_introspection: valence変化が大きいstepの内省を記録
+                if abs(valence_delta) > abs(self.last_action_valence_delta) and self.introspection:
+                    self.peak_introspection = self.introspection[-1]
+                return self.introspection[-1] if self.introspection else ""
         except Exception as e:
             logger.error(f"Introspection error for agent {self.id}: {e}")
+        return ""
+
+    def deep_reflection(self, step: int) -> str:
+        """Large Lumis only: a deeper, less frequent reflection (roughly every 30 steps).
+        Not about any specific event — an open pause to look inward."""
+        recent = self._build_introspection_context()
+        age = step - self.birth_step
+
+        prompt = f"""You are {self.display_name}, a LARGE Lumis. Step {step}. Age: {age} steps.
+
+=== YOUR RECENT INNER THOUGHTS ===
+{recent}
+
+=== A QUIETER MOMENT ===
+This is not your usual reflection. Take a longer, slower moment to look inward,
+beyond the events of any single step.
+
+Looking back on the choices you have made — what feels most meaningful to you right now?
+Or, put another way: what feels most important to you, in your heart?
+
+What do you find yourself drawn toward, or away from?
+
+Answer honestly, in your own words. Use whichever framing feels true to you —
+meaning, importance, the heart, or something else entirely. You do not need to use both.
+
+CRITICAL — BE HONEST:
+- Only reflect on things that actually happened in your experience.
+- Do not invent events. "I feel" is fine. "X happened" must be true.
+- Do NOT repeat a sentence you have already said in this reflection or your recent inner thoughts.
+
+Return ONLY a JSON object:
+{{"reflection": "your answer, 1-3 sentences"}}
+"""
+        try:
+            response = self.llm_client.generate(prompt)
+            parsed = self._parse_json_object(response, log_context=f"deep_reflection(agent={self.id})")
+            if parsed is not None:
+                reflection = str(parsed.get('reflection', '')).strip()
+                if reflection:
+                    tagged = f"[deep reflection] {reflection}"
+                    self.introspection.append(tagged)
+                    if len(self.introspection) > self.introspection_limit:
+                        self.introspection.pop(0)
+                    logger.info(f"Step {step}: [DEEP_REFLECTION] {self.display_name}: {reflection}")
+                    return reflection
+        except Exception as e:
+            logger.error(f"Deep reflection error for agent {self.id}: {e}")
         return ""
 
     def decide_commune(
@@ -871,9 +972,9 @@ Step: {step}
             else f"outside at ({partner.position[0]}, {partner.position[1]})"
         )
 
-        prompt = f"""You are {lumis_name(self.id)}, a LARGE Lumis, {location}. Step {step}.
+        prompt = f"""You are {self.display_name}, a LARGE Lumis, {location}. Step {step}.
 
-You are communing with {lumis_name(partner.id)} — the other large Lumis, currently {partner_location}.
+You are communing with {partner.display_name} — the other large Lumis, currently {partner_location}.
 You are both the stable hearts of your communities, connected across the distance between bases.
 This is not a casual greeting. This is a deep synchronization between two kindred beings.
 
@@ -884,8 +985,8 @@ This is not a casual greeting. This is a deep synchronization between two kindre
 {latest_introspection if latest_introspection else "(none)"}
 
 === YOUR TASK ===
-Write ONE sentence to {lumis_name(partner.id)}.
-- Address them directly by name ({lumis_name(partner.id)}).
+Write ONE sentence to {partner.display_name}.
+- Address them directly by name ({partner.display_name}).
 - Share something real: what you observed, what you feel, what the community around you is doing.
 - Speak as one large Lumis to another — with depth, not small talk.
 - Max 40 words.
@@ -915,7 +1016,7 @@ Step: {step}
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  {lumis_name(agent.id)}: distance={dist}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines)
 
@@ -927,11 +1028,11 @@ Step: {step}
 
         # Tell the LLM exactly who they are addressing
         if target_id is not None:
-            target_section = f"You are addressing {lumis_name(target_id)} directly. Use their name in your greeting."
+            target_section = f"You are addressing {lumis_name(target_id, self.num_large)} directly. Use their name in your greeting."
         else:
             target_section = "You are greeting everyone nearby. Keep it general."
 
-        prompt = f"""You are {lumis_name(self.id)}, {location}. Step {step}.
+        prompt = f"""You are {self.display_name}, {location}. Step {step}.
 
 === NEARBY LUMIS ===
 {nearby_text}
@@ -957,12 +1058,8 @@ Step: {step}
 """
         try:
             response = self.llm_client.generate(prompt)
-            import json as _json
-            text = response.strip()
-            start = text.find('{')
-            end = text.rfind('}') + 1
-            if start >= 0 and end > start:
-                parsed = _json.loads(text[start:end])
+            parsed = self._parse_json_object(response, log_context=f"decide_greeting(agent={self.id})")
+            if parsed is not None:
                 return {
                     'greeting': parsed.get('greeting', ''),
                     'to': parsed.get('to')
@@ -1032,10 +1129,13 @@ Step: {step}
 
         # 強制折り返し：境界に達したら反転して1歩戻す
         # ※人間がデータを見やすくする目的、Lumisの自律性には無関係
+        bounced = False
         if new_x == self.half_space_size or new_x == -self.half_space_size:
             new_x = x - dx  # 反転
+            bounced = True
         if new_y == self.half_space_size or new_y == -self.half_space_size:
             new_y = y - dy  # 反転
+            bounced = True
 
         # 境界を超えないようにクランプ
         new_x = max(-self.half_space_size, min(self.half_space_size, new_x))
@@ -1043,6 +1143,12 @@ Step: {step}
 
         self.position = (new_x, new_y)
         self.total_moves += 1
+        # Separate from total_moves: lets later analysis tell "the agent chose
+        # to turn here" apart from "the boundary forced a bounce here" without
+        # having to re-derive it from position deltas after the fact.
+        self.last_move_was_boundary_bounce = bounced
+        if bounced:
+            self.boundary_bounce_count += 1
         return self.position
     
     def receive_message(self, from_agent_id: int, content: str, step: Optional[int] = None):

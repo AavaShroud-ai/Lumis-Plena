@@ -45,6 +45,20 @@ class Simulation:
         self.num_agents = agent_config['num_agents']
         self.num_large = agent_config.get('num_large', 2)
         self.num_small = agent_config.get('num_small', 18)
+
+        # Guard against config.yaml drift: if num_large/num_small is ever
+        # omitted or edited inconsistently, this fails loudly at startup
+        # instead of quietly running with a stale agent split (e.g. the
+        # pre-run-009 defaults of 2 large / 18 small) for a 500-step run
+        # that takes 2+ days to discover the mistake in.
+        if self.num_large + self.num_small != self.num_agents:
+            raise ValueError(
+                f"config.yaml agent counts don't add up: "
+                f"num_large ({self.num_large}) + num_small ({self.num_small}) "
+                f"= {self.num_large + self.num_small}, but num_agents = {self.num_agents}. "
+                f"Check that all three were updated together."
+            )
+
         self.communication_radius = agent_config['communication_radius']
         self.memory_limit = agent_config.get('memory_limit', 20)
         self.memory_size = agent_config.get('memory_size', 5)
@@ -273,7 +287,8 @@ class Simulation:
                 memory_size=self.memory_size,
                 message_history_limit=self.message_history_limit,
                 message_context_size=self.message_context_size,
-                lumis_type=lumis_type
+                lumis_type=lumis_type,
+                num_large=self.num_large
             )
             # Assign home base for large Lumis (L0 → base_alpha, L1 → base_beta)
             if lumis_type == "large":
@@ -909,6 +924,12 @@ class Simulation:
             else:
                 introspection_map[agent.id] = agent.introspection[-1] if agent.introspection else ""
 
+        # Deep reflection: large Lumis only, roughly once a month (every 30 steps)
+        if self.step % 30 == 0:
+            for agent in self.agents:
+                if agent.lumis_type == 'large':
+                    agent.deep_reflection(self.step)
+
         # Phase 3: Message transmission (new design).
         # - Large Lumis: commune with the other large Lumis every step (cross-base deep sync).
         # - Small Lumis: no message if no nearby agents.
@@ -1034,6 +1055,39 @@ class Simulation:
         SEXUAL_PREP_LARGE = 60     # 大型有性生殖準備期間
         CHILD_REARING_STEPS = 30   # Child-rearing period (steps)
 
+        # Single source of truth for everything that differs between large and
+        # small Lumis in the reproduction system. Previously these values were
+        # re-derived independently at each branch (birth-time prep, clone-start
+        # eligibility, sexual-start eligibility, familiarity threshold, partner
+        # search) via separate ternaries — that's how the sexual prep duration
+        # at birth-time silently fell out of sync with the sexual-start branch
+        # when large-Lumis pairing was added in run 010 (birth-time was hardcoded
+        # to SEXUAL_PREP_SMALL for everyone; fixed here). Add a new field once,
+        # and every branch below picks it up automatically.
+        REPRODUCTION_RULES = {
+            "small": {
+                "maturity": MATURITY_SMALL,
+                "clone_cooldown": CLONE_COOLDOWN_SMALL,
+                "clone_prep": CLONE_PREP_SMALL,
+                "sexual_prep": SEXUAL_PREP_SMALL,
+                "sexual_familiarity_threshold": 0.1,
+                "clone_requires_in_place": False,
+                "clone_lifetime_limit": 1,  # None below means "no limit" (large Lumis)
+            },
+            "large": {
+                "maturity": MATURITY_LARGE,
+                "clone_cooldown": CLONE_COOLDOWN_LARGE,
+                "clone_prep": CLONE_PREP_LARGE,
+                "sexual_prep": SEXUAL_PREP_LARGE,
+                # Large Lumis are stationed together and greet everyone constantly,
+                # so their familiarity climbs fast — raise the bar so pairing still
+                # reflects a real distinction rather than proximity alone.
+                "sexual_familiarity_threshold": 0.5,
+                "clone_requires_in_place": True,
+                "clone_lifetime_limit": None,
+            },
+        }
+
         flare_active = self.active_flare is not None
         fire_active = self.is_night
 
@@ -1044,11 +1098,13 @@ class Simulation:
             if not agent.reproducing:
                 continue
 
+            rules = REPRODUCTION_RULES[agent.lumis_type]
+
             # 準備期間を計算
             if agent.reproduction_type == "clone":
-                prep = CLONE_PREP_LARGE if agent.lumis_type == "large" else CLONE_PREP_SMALL
-            else:  # sexual（産む側のみここに来る、小型のみ）
-                prep = SEXUAL_PREP_SMALL
+                prep = rules["clone_prep"]
+            else:  # sexual（産む側がここに来る。010より大型も対象）
+                prep = rules["sexual_prep"]
 
             elapsed = self.step - agent.reproduction_start_step
             if elapsed < prep:
@@ -1071,6 +1127,7 @@ class Simulation:
                     message_history_limit=self.message_history_limit,
                     message_context_size=self.message_context_size,
                     lumis_type=agent.lumis_type,
+                    num_large=self.num_large,
                 )
                 child.energy = 0.5
                 child.birth_step = self.step
@@ -1116,6 +1173,7 @@ class Simulation:
                             message_history_limit=self.message_history_limit,
                             message_context_size=self.message_context_size,
                             lumis_type=agent.lumis_type,
+                            num_large=self.num_large,
                         )
                         child.energy = 0.5
                         child.birth_step = self.step
@@ -1172,15 +1230,15 @@ class Simulation:
                 if agent.reproducing:
                     continue  # すでに準備中
 
-                mature = (self.step - agent.birth_step) >= (MATURITY_LARGE if agent.lumis_type == "large" else MATURITY_SMALL)
-                clone_cooldown = CLONE_COOLDOWN_LARGE if agent.lumis_type == "large" else CLONE_COOLDOWN_SMALL
-                cooldown_ok = (self.step - agent.last_reproduction_step) >= clone_cooldown
+                rules = REPRODUCTION_RULES[agent.lumis_type]
+                mature = (self.step - agent.birth_step) >= rules["maturity"]
+                cooldown_ok = (self.step - agent.last_reproduction_step) >= rules["clone_cooldown"]
 
                 # --- clone複製開始 ---
                 # 条件：energy≥0.8、arousal≤0.5、成熟済み、クールダウン完了、小型は生涯1回まで
                 # 大型は基地内限定・回数制限なし、小型は外でも可・生涯1回まで
-                location_ok = agent.in_place if agent.lumis_type == "large" else True
-                clone_limit_ok = (agent.lumis_type == "large") or (agent.clone_count < 1)
+                location_ok = agent.in_place if rules["clone_requires_in_place"] else True
+                clone_limit_ok = (rules["clone_lifetime_limit"] is None) or (agent.clone_count < rules["clone_lifetime_limit"])
                 if (location_ok and
                         clone_limit_ok and
                         agent.energy >= 0.8 and
@@ -1190,7 +1248,7 @@ class Simulation:
                     agent.reproducing = True
                     agent.reproduction_type = "clone"
                     agent.reproduction_start_step = self.step
-                    prep = CLONE_PREP_LARGE if agent.lumis_type == "large" else CLONE_PREP_SMALL
+                    prep = rules["clone_prep"]
                     location_label = agent.current_place if agent.in_place else f"outside ({agent.position[0]}, {agent.position[1]})"
                     logger.info(
                         f"Step {self.step}: [CLONE_START] {lumis_name(agent.id)} ({agent.lumis_type}) "
@@ -1198,26 +1256,31 @@ class Simulation:
                     )
                     continue  # 同stepでsexualはしない
 
-                # --- sexual複製開始（実験：ハードル激甘版） ---
-                # 条件：energy≥0.5、valence≥0.5、familiarity≥0.1、成熟済み、クールダウン完了、生涯2回まで
+                # --- sexual複製開始（実験：ハードル激甘版・小型／大型別条件） ---
+                # 小型：energy≥0.5、valence≥0.5、familiarity≥0.1、成熟済み、クールダウン完了、生涯1回まで
+                # 大型：energy≥0.5、valence≥0.5、familiarity≥0.5（大型同士は自然と親密度が高いため閾値を上げる）、生涯1回まで
                 # サイズ同士のみ（大×大、小×小）、基地内外どちらでも可
-                if (agent.lumis_type == "small" and
-                        agent.sexual_count < 1 and
-                        agent.valence >= 0.5 and
-                        agent.energy >= 0.5 and
-                        mature and
-                        cooldown_ok and
-                        not getattr(agent, 'is_sheltering', False)):
+                is_reproduction_ready = (
+                    agent.sexual_count < 1 and
+                    agent.valence >= 0.5 and
+                    agent.energy >= 0.5 and
+                    mature and
+                    cooldown_ok and
+                    not getattr(agent, 'is_sheltering', False)
+                )
+                if is_reproduction_ready:
+                    familiarity_threshold = rules["sexual_familiarity_threshold"]
+                    maturity_threshold = rules["maturity"]
                     nearby = [
                         a for a in self.agents
                         if a.id != agent.id
                         and a.lumis_type == agent.lumis_type  # サイズ同士のみ
                         and not a.reproducing
                         and agent.distance_to(a.position) <= agent.communication_radius
-                        and agent.get_familiarity_score(a.id) >= 0.1  # 激甘
+                        and agent.get_familiarity_score(a.id) >= familiarity_threshold
                         and a.valence >= 0.5
                         and a.energy >= 0.5
-                        and (self.step - a.birth_step) >= MATURITY_SMALL
+                        and (self.step - a.birth_step) >= maturity_threshold
                         and (self.step - a.last_reproduction_step) >= SEXUAL_COOLDOWN
                         and not getattr(a, 'is_sheltering', False)
                         and a.sexual_count < 1  # supporting側も1回まで
@@ -1236,7 +1299,7 @@ class Simulation:
                             gestating = agent if agent.id > partner.id else partner
                             supporting = partner if gestating == agent else agent
 
-                        prep = SEXUAL_PREP_SMALL
+                        prep = rules["sexual_prep"]
 
                         gestating.reproducing = True
                         gestating.reproduction_type = "sexual"
