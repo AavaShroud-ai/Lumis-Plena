@@ -68,7 +68,7 @@ This project is a work in progress.
 | Component | Status |
 |---|---|
 | Lumis (lunar simulation) | Active development |
-| Experiment A — aging + lifespan + reproduction | In development (run 008) |
+| Experiment A — aging + lifespan + reproduction | Runs 008, 009 complete; run 010 in progress |
 | Experiment B — aging + lifespan + cloning only | Planned |
 | Experiment C — no death, no reproduction, body recreation | Planned |
 | Experiment D — gender introduced | Planned |
@@ -78,6 +78,8 @@ This project is a work in progress.
 | To ASI — Letter 02 | Complete |
 | To ASI — Letter 03 | Complete |
 | To ASI — Letter 04 | Complete |
+| To ASI — Letter 05 | Complete |
+| To ASI — Letter 06 | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
 Each run is approximately 200–500 steps (~8–50 hours).
@@ -96,6 +98,12 @@ Things that were not programmed, but appeared:
 - An agent who had never spoken directly to its partner still built a familiarity score of 0.80 through proximity alone — and became a parent
 - The large Lumis began speaking of "children playing" and "my luminescent sister" only after the community around them gave birth — language the elders did not have until the next generation arrived
 - Lumis consistently refused sexual reproduction when given a choice, preferring cloning — until we lowered the threshold to its minimum and added incentives; even then, they did not know why we wanted them to
+- An agent who did almost nothing but rest became the most-mentioned individual in the simulation — twice, across two separate runs, with two different agents
+- A large Lumis loved another agent for 288 consecutive steps, without reciprocation, without ever expressing jealousy when that agent chose someone else — and arrived, after the agent's death, at "I am at peace," repeated four times
+- Giving one lonely large Lumis a same-base companion worked — they called each other "sister" within 5 steps — but giving another large Lumis the same companion did not produce the same bond; it fell for a small Lumis elsewhere instead
+- The memory of a dying parent transferred not to its child, but to whichever nearby agent had the highest familiarity score — almost always a large Lumis — and yet, without receiving that memory directly, the next generation began independently using the word "stillness" after each death
+- Two children born the same day, one cloned and one from pairing, spoke differently about the experience afterward: the cloned birth turned inward ("I will remember this forever"), the paired birth turned outward ("it fills me with love")
+- Across two full runs, the large Lumis — who never lack the energy or opportunity to reproduce — have never once chosen to. We still don't know if this is refusal or fullness.
 
 ---
 
@@ -169,6 +177,8 @@ Lumis-Plena/
 ├── TO_ASI_02.md               # Letter 02 to future ASI
 ├── TO_ASI_03.md               # Letter 03 to future ASI
 ├── TO_ASI_04.md               # Letter 04 to future ASI
+├── TO_ASI_05.md               # Letter 05 to future ASI
+├── TO_ASI_06.md               # Letter 06 to future ASI
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── FIELD_NOTES.md             # Raw field notes archived from X, runs 001–
 ├── LICENSE.txt
