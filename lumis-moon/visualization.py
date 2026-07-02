@@ -360,8 +360,19 @@ class Visualizer:
                     color = '#ff1493'      # Fallback color
                     edge_color = '#cc1060'
             elif current_step <= getattr(agent, 'rearing_until_step', -1):
-                color = '#ff1493'      # Hot pink: clone parent (preparation or rearing)
-                edge_color = '#ff70aa'
+                # Rearing period: reproduction_type was already cleared to None
+                # at birth (see simulation.py), so use last_reproduction_type,
+                # which simulation.py saves right before that reset. Previously
+                # this branch ignored type entirely and always rendered
+                # hot pink, so sexual-reproduction parents looked identical
+                # to clone parents throughout the whole rearing period.
+                last_rep_type = getattr(agent, 'last_reproduction_type', None)
+                if last_rep_type in ("sexual", "sexual_support"):
+                    color = '#6600cc'      # Deep purple: sexual reproduction parent (rearing)
+                    edge_color = '#9900cc' if last_rep_type == "sexual" else '#bb44bb'
+                else:
+                    color = '#ff1493'      # Hot pink: clone parent (rearing)
+                    edge_color = '#ff70aa'
             elif getattr(agent, 'parent_ids', []) and (current_step - agent.birth_step) <= 30:
                 # Newborn check: MUST come before in_place to override cyan
                 if len(agent.parent_ids) == 2:

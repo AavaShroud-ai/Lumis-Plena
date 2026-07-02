@@ -32,6 +32,15 @@ def lumis_name(agent_id: int, num_large: int = 4) -> str:
 FALLBACK_REASONING_LENGTH = 100
 MAX_MESSAGE_WORDS = 200
 
+# Reproduction prep-period lengths, mirrored from simulation.py's REPRODUCTION_RULES.
+# Used only to compute a human-readable "X of Y steps into this" progress note for
+# introspection prompts — not for any gameplay/timing logic, which lives solely in
+# simulation.py. If those values ever change, update here too.
+CLONE_PREP_SMALL = 30
+CLONE_PREP_LARGE = 30
+SEXUAL_PREP_SMALL = 30
+SEXUAL_PREP_LARGE = 60
+
 # Direction mappings (4 cardinal directions only)
 # Coordinate system: X increases from left to right, Y increases from bottom to top
 DIRECTION_MAP = {
@@ -149,7 +158,13 @@ class Agent:
 
         # Reproduction state flags
         self.reproducing = False           # True during preparation or gestation period
-        self.reproduction_type = None      # "clone" or "sexual"
+        self.reproduction_type = None      # "clone" or "sexual" (cleared at birth)
+        # Preserves reproduction_type's value through the rearing period, after
+        # simulation.py clears reproduction_type at birth. Without this,
+        # visualization.py has no way to tell a sexual-reproduction parent's
+        # rearing color apart from a clone parent's — both were rendering as
+        # the clone color because the type info was already gone by then.
+        self.last_reproduction_type = None
         self.reproduction_start_step = -1  # Step when reproduction preparation began
         self.reproduction_partner_id = None  # Partner ID for sexual reproduction
         self.is_gestating = False          # True if this agent is the gestating parent
@@ -813,9 +828,19 @@ Step: {step}
         self,
         action_taken: Optional[Dict],
         step: int,
-        valence_before: float
+        valence_before: float,
+        partner_status: Optional[str] = None
     ) -> str:
-        """Phase 2.5: Post-action introspection. LLM updates or appends to existing entries."""
+        """Phase 2.5: Post-action introspection. LLM updates or appends to existing entries.
+
+        partner_status: optional one-line description of the reproduction partner's
+        current state (energy trend, recent action), supplied by simulation.py.
+        Used to give gestating/supporting agents something new to reflect on each
+        step even when their own action is forced to stay the same (rest) during
+        the reproduction prep/rearing period — otherwise the prompt describes the
+        same unchanging action every step and introspection has nothing fresh to
+        respond to, which is why it used to collapse into repeating one sentence.
+        """
         act = action_taken.get('action', 'stay') if action_taken else 'stay'
         direction = action_taken.get('direction', '') if action_taken else ''
         act_desc = act if not direction else f"{act} ({direction})"
@@ -834,12 +859,29 @@ Step: {step}
         if getattr(self, 'reproducing', False) and getattr(self, 'reproduction_partner_id', None) is not None:
             rep_type = getattr(self, 'reproduction_type', '')
             partner_id = self.reproduction_partner_id
+            partner_name = lumis_name(partner_id, self.num_large)
+
+            # How far along the prep/rearing period this agent is — gives
+            # introspection something concrete and changing to reference even
+            # when the actual action taken is forced to stay constant (rest).
+            start_step = getattr(self, 'reproduction_start_step', None)
+            progress_note = ""
+            if start_step is not None and start_step >= 0:
+                elapsed = step - start_step
+                total = CLONE_PREP_LARGE if rep_type == 'clone' and self.lumis_type == 'large' else \
+                    CLONE_PREP_SMALL if rep_type == 'clone' else \
+                    SEXUAL_PREP_LARGE if self.lumis_type == 'large' else SEXUAL_PREP_SMALL
+                progress_note = f" You are {elapsed} of {total} steps into this."
+
             if rep_type == 'sexual':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently expecting a child with {lumis_name(partner_id, self.num_large)}. They are your partner right now.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently expecting a child with {partner_name}. They are your partner right now.{progress_note}\n"
             elif rep_type == 'sexual_support':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently supporting {lumis_name(partner_id, self.num_large)} who is expecting your child together.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently supporting {partner_name} who is expecting your child together.{progress_note}\n"
             elif rep_type == 'clone':
-                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently preparing to create a clone of yourself.\n"
+                relationship_section = f"\n=== YOUR CURRENT SITUATION ===\nYou are currently preparing to create a clone of yourself.{progress_note}\n"
+
+            if partner_status:
+                relationship_section += f"{partner_name}, right now: {partner_status}\n"
 
         # Recent birth notification (one-step only)
         recent_birth = getattr(self, '_recent_birth_note', "")
