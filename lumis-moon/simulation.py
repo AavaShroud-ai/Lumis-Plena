@@ -916,8 +916,21 @@ class Simulation:
             # Large Lumis introspect every step; small Lumis every 5 steps
             # Also introspect if birth note from PREVIOUS step is pending
             has_birth_note = bool(getattr(agent, '_recent_birth_note', '')) or bool(getattr(agent, '_birth_note_pending', ''))
+
+            # For agents mid-reproduction, give introspection a one-line snapshot
+            # of the partner's current state. Their own action is often forced
+            # to stay the same (rest) during prep/rearing, so without this the
+            # prompt looks identical step after step and introspection has
+            # nothing new to respond to.
+            partner_status = None
+            if getattr(agent, 'reproducing', False) and getattr(agent, 'reproduction_partner_id', None) is not None:
+                partner = next((a for a in self.agents if a.id == agent.reproduction_partner_id), None)
+                if partner is not None:
+                    energy_word = "thriving" if partner.energy >= 1.2 else "steady" if partner.energy >= 0.8 else "low on energy"
+                    partner_status = f"energy {round(partner.energy, 2)} ({energy_word}), currently {getattr(partner, 'current_place', None) or 'outside'}."
+
             if agent.lumis_type == 'large' or run_introspection or has_birth_note:
-                latest = agent.introspect(action_taken, self.step, valence_before)
+                latest = agent.introspect(action_taken, self.step, valence_before, partner_status=partner_status)
                 introspection_map[agent.id] = latest
                 if latest:
                     logger.info(f"Step {self.step}: [INTROSPECT] {lumis_name(agent.id)}: {latest[:100]}")
@@ -1201,6 +1214,7 @@ class Simulation:
                     partner._birth_note_pending = partner._recent_birth_note
                     # パートナーの準備フラグも解除
                     partner.reproducing = False
+                    partner.last_reproduction_type = partner.reproduction_type  # save before reset (for rearing-period display color)
                     partner.reproduction_type = None
                     partner.reproduction_start_step = -1
                     partner.reproduction_partner_id = None
@@ -1215,6 +1229,7 @@ class Simulation:
 
             # 準備フラグをリセット
             agent.reproducing = False
+            agent.last_reproduction_type = agent.reproduction_type  # save before reset (for rearing-period display color)
             agent.reproduction_type = None
             agent.reproduction_start_step = -1
             agent.reproduction_partner_id = None
