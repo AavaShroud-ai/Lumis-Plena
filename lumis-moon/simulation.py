@@ -1086,6 +1086,8 @@ class Simulation:
                 "sexual_familiarity_threshold": 0.1,
                 "clone_requires_in_place": False,
                 "clone_lifetime_limit": 1,  # None below means "no limit" (large Lumis)
+                "clone_arousal_threshold": 0.5,  # kept: original "calm before cloning" /
+                                                  # anti-idling design intent still applies
             },
             "large": {
                 "maturity": MATURITY_LARGE,
@@ -1098,6 +1100,14 @@ class Simulation:
                 "sexual_familiarity_threshold": 0.5,
                 "clone_requires_in_place": True,
                 "clone_lifetime_limit": None,
+                # Removed for run 011: large Lumis are stationed at the base center,
+                # constantly greeted by everyone nearby, so arousal (driven by nearby
+                # agent count) climbs structurally and stays high — run 010 showed
+                # this silently blocked cloning for the entire run regardless of any
+                # actual willingness to clone. The original 0.5 threshold's intent
+                # (discourage idling / require calm before cloning) doesn't apply to
+                # large Lumis in the first place, since they don't explore or idle.
+                "clone_arousal_threshold": None,
             },
         }
 
@@ -1250,14 +1260,16 @@ class Simulation:
                 cooldown_ok = (self.step - agent.last_reproduction_step) >= rules["clone_cooldown"]
 
                 # --- clone複製開始 ---
-                # 条件：energy≥0.8、arousal≤0.5、成熟済み、クールダウン完了、小型は生涯1回まで
-                # 大型は基地内限定・回数制限なし、小型は外でも可・生涯1回まで
+                # 条件：energy≥0.8、(small限定)arousal≤threshold、成熟済み、クールダウン完了、小型は生涯1回まで
+                # 大型は基地内限定・回数制限なし・arousal制限なし(011〜)。小型は外でも可・生涯1回まで
                 location_ok = agent.in_place if rules["clone_requires_in_place"] else True
                 clone_limit_ok = (rules["clone_lifetime_limit"] is None) or (agent.clone_count < rules["clone_lifetime_limit"])
+                arousal_threshold = rules["clone_arousal_threshold"]
+                arousal_ok = (arousal_threshold is None) or (agent.arousal <= arousal_threshold)
                 if (location_ok and
                         clone_limit_ok and
                         agent.energy >= 0.8 and
-                        agent.arousal <= 0.5 and
+                        arousal_ok and
                         mature and
                         cooldown_ok):
                     agent.reproducing = True
