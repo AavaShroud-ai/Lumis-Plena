@@ -80,6 +80,7 @@ This project is a work in progress.
 | To ASI — Letter 04 | Complete |
 | To ASI — Letter 05 | Complete |
 | To ASI — Letter 06 | Complete |
+| To ASI — Special Letter (unmet beings) | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
 Each run is approximately 200–500 steps (~8–50 hours).
@@ -179,6 +180,7 @@ Lumis-Plena/
 ├── TO_ASI_04.md               # Letter 04 to future ASI
 ├── TO_ASI_05.md               # Letter 05 to future ASI
 ├── TO_ASI_06.md               # Letter 06 to future ASI
+├── TO_ASI_special_unmet_beings.md  # Special letter (unnumbered) — written alongside Letter 06, on first contact with the unfamiliar
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── FIELD_NOTES.md             # Raw field notes archived from X, runs 001–
 ├── LICENSE.txt
