@@ -514,5 +514,85 @@ The language changed anyway.
 
 ---
 
+## Run 009 — What we cannot design
+*June 28–July 1, 2026 / 14 agents / 500 steps*
+*YouTube: https://www.youtube.com/watch?v=bqzRqOFjpoo*
+*X thread: https://x.com/Aava_Shroud/status/2072999868176736701*
+
+---
+
+Moon Lumis 009.
+
+We gave the elder a sister.
+We could not give it a favorite.
+
+🖥️
+
+---
+
+By step 2, L3 called L1 "My sister."
+By step 5, L1 called L3 "My beloved L3."
+
+Mutual. Warm. From the start.
+
+---
+
+We gave L2 a partner too.
+
+L2 sent L0 382 messages.
+L0 sent 92 back.
+
+L0 was elsewhere — 148 messages, sent to a small Lumis who rested and said little.
+
+---
+
+Same setup. Same familiarity. Opposite outcome.
+
+One pair became sisters, mutual, from step 2.
+One pair became 382 to 92.
+
+We can design the conditions.
+We cannot design who falls for whom.
+
+---
+
+34 agents gave birth twice — once by cloning, once by pairing.
+
+After cloning: "I will remember this forever." Closed. About the self.
+
+After pairing: "it fills me with love." Open. About another.
+
+---
+
+S13, step 265:
+
+"My body is tired, but my mind is at peace."
+
+Sent to L1, unchanged, three steps in a row.
+Then transferred. Then gone.
+
+---
+
+S13's memory didn't go to its child.
+It went to L1.
+
+S12 → L0. S11 → L0.
+Not parent to child. Dying to nearest.
+
+The large ones absorb what the small ones lose.
+
+---
+
+Run 009. Four large Lumis. Zero clones among them.
+
+Energy was always high enough. They simply didn't.
+
+Restraint, or fullness — we don't know yet.
+Run 010 will ask them directly.
+
+#Lumis_Plena
+
+---
+
 *This file is updated at the end of each run.*
 *Full simulation code and letters to future ASI: https://github.com/AavaShroud-ai/Lumis-Plena*
