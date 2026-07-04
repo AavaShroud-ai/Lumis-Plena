@@ -109,9 +109,35 @@ class Simulation:
         self.is_night = False
 
         # Solar flare parameters
-        self.solar_flare_configs = self.config.get('solar_flares', [])
+        flare_config = self.config.get('solar_flares', {})
+        if isinstance(flare_config, list):
+            # Backward compatibility: old-style fixed list in config.yaml
+            self.solar_flare_configs = flare_config
+            self.solar_flare_seed = None
+        elif flare_config.get('generate', False):
+            self.solar_flare_configs = self._generate_solar_flares(flare_config)
+        else:
+            self.solar_flare_configs = flare_config.get('fixed_list', [])
+            self.solar_flare_seed = None
         self.active_flare = None  # Currently active solar flare (None if none)
-        logger.info(f"Solar flares configured: {len(self.solar_flare_configs)}")
+        logger.info(f"Solar flares configured: {len(self.solar_flare_configs)} (seed={self.solar_flare_seed})")
+        for fc in self.solar_flare_configs:
+            logger.info(f"  {fc['name']}: start_step={fc['start_step']}, duration={fc['duration']}, damage={fc['damage']:.3f}")
+
+        # Archive the generated schedule alongside this run's results, so the
+        # exact flare sequence a run experienced is recoverable without
+        # re-parsing the full simulation.log. Also enables reproducing the
+        # same schedule via config.yaml's solar_flares.seed later.
+        if self.output_dir:
+            try:
+                os.makedirs(self.output_dir, exist_ok=True)
+                with open(os.path.join(self.output_dir, "solar_flares.json"), "w", encoding="utf-8") as f:
+                    json.dump({
+                        "seed": self.solar_flare_seed,
+                        "flares": self.solar_flare_configs,
+                    }, f, indent=2)
+            except OSError as e:
+                logger.warning(f"Could not write solar_flares.json: {e}")
 
         # LLM parameters
         llm_config = self.config['llm']
@@ -143,6 +169,88 @@ class Simulation:
             'agents_in_fire_radius': [],  # Total agents within any active flare radius
         }
         
+    def _generate_solar_flares(self, flare_config: dict) -> List[Dict]:
+        """Generate a solar flare schedule from statistical parameters instead
+        of a fixed list, modeling two properties of real solar flares:
+
+        1. Intervals between flares follow a log-normal distribution, not an
+           even spacing. Real lunar-orbit flare observations (Chandrayaan-2
+           XSM catalogue) show this shape — flares cluster with long quiet
+           gaps between clusters, rather than arriving on a metronome.
+        2. Severity and frequency are inversely related: small flares are
+           common, large ones rare (real X-class flares occur roughly 8
+           times per 11-year solar cycle vs. ~2000 M-class flares). Modeled
+           here with a simple power-law-shaped random draw rather than a
+           uniform one, so most generated flares are mild and only occasionally
+           does a severe one appear.
+        """
+        seed = flare_config.get('seed')
+        if seed is not None:
+            rng = np.random.default_rng(seed)
+            actual_seed = seed
+        else:
+            # Capture the auto-generated seed so this run's exact flare
+            # schedule can be reproduced later if needed (see self.solar_flare_seed).
+            seed_seq = np.random.SeedSequence()
+            rng = np.random.default_rng(seed_seq)
+            actual_seed = int(seed_seq.entropy)
+        self.solar_flare_seed = actual_seed
+
+        median = flare_config.get('interval_median_steps', 50)
+        sigma = flare_config.get('interval_sigma', 0.7)
+        min_interval = flare_config.get('min_interval_steps', 15)
+        damage_min = flare_config.get('damage_min', 0.08)
+        damage_max = flare_config.get('damage_max', 0.35)
+        damage_shape = flare_config.get('damage_shape', 2.5)
+        duration_min = flare_config.get('duration_min', 3)
+        duration_max = flare_config.get('duration_max', 8)
+        warning_steps = flare_config.get('warning_steps', 2)
+
+        # Safety check: the flare-processing loop elsewhere in this class can
+        # only track one active flare at a time (it takes the first match and
+        # breaks), so flares must never be close enough to overlap. If
+        # min_interval is too small relative to how long a flare (plus its
+        # warning window) can last, a later flare could silently start before
+        # an earlier one has finished being processed and get shadowed
+        # without any error — worth catching at generation time instead.
+        assert min_interval >= duration_max + warning_steps, (
+            f"solar_flares.min_interval_steps ({min_interval}) must be >= "
+            f"duration_max + warning_steps ({duration_max + warning_steps}) "
+            f"to guarantee flares never overlap."
+        )
+
+        flares = []
+        current_step = 0
+        i = 0
+        while True:
+            # Log-normal interval: mean of the underlying normal is set so the
+            # distribution's median equals `median` steps.
+            interval = rng.lognormal(mean=np.log(max(median, 1)), sigma=sigma)
+            interval = max(interval, min_interval)
+            current_step += int(round(interval))
+            if current_step >= self.duration:
+                break
+            i += 1
+
+            duration = int(rng.integers(duration_min, duration_max + 1))
+
+            # Power-law-shaped severity: draw u in [0,1), raise to a power so
+            # low values (small flares) are far more likely than high values
+            # (severe flares) — higher damage_shape = rarer large flares.
+            u = rng.random()
+            severity_fraction = u ** damage_shape
+            damage = damage_min + severity_fraction * (damage_max - damage_min)
+
+            flares.append({
+                "name": f"flare_{i}",
+                "start_step": current_step,
+                "duration": duration,
+                "damage": round(float(damage), 3),
+                "warning_steps": warning_steps,
+            })
+
+        return flares
+
     def _is_position_in_place(self, position: Tuple[int, int]) -> bool:
         """Check if a position is inside any place"""
         return get_place_at_position(position, self.places) is not None
@@ -491,11 +599,19 @@ class Simulation:
             if self.step > getattr(agent, 'rearing_until_step', -1):
                 continue
             last_type = getattr(agent, 'last_reproduction_type', None)
-            if last_type in ('sexual', 'clone'):
-                # Gestating parent (sexual) or solo clone parent: energy decay compensation
+            if last_type == 'clone':
+                # Solo clone parent: baseline compensation (unchanged)
                 agent.energy = min(agent.energy_capacity, agent.energy + 0.005)
-            elif last_type == 'sexual_support':
-                # Supporting parent: bonus energy recovery
+            elif last_type in ('sexual', 'sexual_support'):
+                # Sexual reproduction (both gestating and supporting roles):
+                # equal, higher compensation than cloning. The original
+                # asymmetry here (supporting > gestating) wasn't modeling any
+                # known physical burden — it was an incentive to make pairing
+                # more attractive than the easier, partner-free option of
+                # cloning. That incentive applies equally to both roles in a
+                # pairing, so both now get the same (higher) rate. Real
+                # physical burden for a future embodied Lumis is still
+                # unknown and can be revisited once it isn't.
                 agent.energy = min(agent.energy_capacity, agent.energy + 0.01)
 
         # Large Lumis during child-rearing: restrict movement outside base
@@ -1176,6 +1292,11 @@ class Simulation:
                     half = len(combined) // 2
                     memory_sets = [combined[:half], combined[half:]]
 
+                    # Ancestral "peak" moments are split the same way, not
+                    # duplicated to both children — keeps the seven-generations
+                    # gift bounded in total, not doubled per pairing.
+                    ancestral_memory_sets = Agent.split_ancestral_memories([agent, partner])
+
                     children = []
                     for i in range(2):
                         new_id_i = max(a.id for a in self.agents) + len(new_agents) + 1
@@ -1201,7 +1322,7 @@ class Simulation:
                         child.birth_step = self.step
                         child.memory = memory_sets[i][:self.memory_limit]
                         child.parent_ids = [agent.id, partner.id]
-                        child.ancestral_memories = Agent.build_ancestral_memories([agent, partner])
+                        child.ancestral_memories = ancestral_memory_sets[i]
                         new_agents.append(child)
                         children.append(child)
 

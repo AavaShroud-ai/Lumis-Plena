@@ -169,7 +169,8 @@ class Agent:
         # Introspection system
         self.introspection: List[str] = []  # Accumulated introspection entries (max 20)
         self.introspection_limit = 20
-        self.last_action_valence_delta = 0.0  # Valence delta from last action (used for peak detection)
+        self.last_action_valence_delta = 0.0  # Valence delta from the most recent action (diagnostic/logging only — NOT peak tracking)
+        self.peak_valence_delta = 0.0         # Largest |valence_delta| seen across this agent's whole life so far (monotonic, never decreases)
         self.peak_introspection: str = ""    # Introspection from the highest-valence-delta step (transferred at death)
         self._recent_birth_note: str = ""    # One-step birth notification passed to introspection prompt
         self._birth_note_pending: str = ""    # Carries birth note to next step if introspection was skipped
@@ -264,17 +265,19 @@ class Agent:
 
     @staticmethod
     def build_ancestral_memories(parents: List['Agent']) -> List[Dict]:
-        """Build a child's ancestral_memories from one or two parents at birth.
+        """Build the full candidate pool of inherited "peak" moments from one
+        or two parents at birth (used as-is for clones, which have one parent
+        and therefore nothing to split; see split_ancestral_memories for the
+        two-parent/two-children case).
 
         Design ("seven generations"): each parent contributes its own
         peak_introspection as a brand-new entry (generations_back=1 from the
         child's perspective), plus whatever it already carries in its own
         ancestral_memories, each aged by one generation. Entries that would
         be more than 7 generations back are dropped — a deliberate, bounded
-        gift rather than an ever-growing archive. With two parents, entries
-        are interleaved oldest-first from each side and capped at 7 total
-        so the child ends up with at most 7 inherited moments regardless of
-        how many ancestors contributed to them.
+        gift rather than an ever-growing archive. Duplicate ancestral moments
+        (e.g. when both parents share an ancestor, as with sibling pairs) are
+        merged, keeping the most recent generations_back. Capped at 7 total.
         """
         MAX_GENERATIONS = 7
         MAX_ENTRIES = 7
@@ -316,6 +319,21 @@ class Agent:
         result = sorted(deduped.values(), key=lambda e: e["generations_back"])
         return result[:MAX_ENTRIES]
 
+    @staticmethod
+    def split_ancestral_memories(parents: List['Agent']) -> Tuple[List[Dict], List[Dict]]:
+        """Split the ancestral memory pool between two children of a sexual
+        pairing, rather than giving each an identical full copy — mirrors how
+        agent.memory is shuffled and split between siblings. Keeps the total
+        gift bounded (at most 7 moments shared across both children, not 7
+        each) so a lineage of many pairings doesn't multiply the amount of
+        inherited memory carried forward."""
+        import random as _random
+        pool = Agent.build_ancestral_memories(parents)
+        shuffled = pool[:]
+        _random.shuffle(shuffled)
+        half = (len(shuffled) + 1) // 2
+        return shuffled[:half], shuffled[half:]
+
     def transfer_memory(self, nearby_agents: List['Agent']):
         """Transfer memory and peak introspection to the most familiar nearby agent before death."""
         if not nearby_agents:
@@ -330,9 +348,23 @@ class Agent:
                 best.memory.pop(0)
             logger.info(f"{self.display_name} transferred memory to {best.display_name}: \"{legacy}\"")
         # Introspection transfer: pass the most emotionally significant introspection entry
-        introspection_to_transfer = self.peak_introspection or (
-            self.introspection[-1] if self.introspection else ''
-        )
+        last_entry = self.introspection[-1] if self.introspection else ''
+        introspection_to_transfer = self.peak_introspection or last_entry
+
+        # Divergence logging (011, per Letter 09 groundwork): record whether
+        # the peak moment and the last moment were the same thing or not.
+        # Letter 07 could only say, for past runs, that this gap was
+        # unknowable — peak_introspection wasn't actually being tracked, so
+        # "last words" and "truest words" were silently conflated. Now that
+        # it's tracked correctly, this run can measure how often they agree.
+        if self.peak_introspection and last_entry:
+            diverged = self.peak_introspection != last_entry
+            logger.info(
+                f"{self.display_name} death: peak_introspection={'DIVERGED' if diverged else 'MATCHED'} "
+                f"vs last_introspection | peak=\"{self.peak_introspection[:80]}\" | "
+                f"last=\"{last_entry[:80]}\""
+            )
+
         if introspection_to_transfer:
             legacy_intro = f"[inner voice from {self.display_name}] {introspection_to_transfer}"
             best.introspection.append(legacy_intro)
@@ -934,15 +966,20 @@ Step: {step}
         direction = action_taken.get('direction', '') if action_taken else ''
         act_desc = act if not direction else f"{act} ({direction})"
         valence_delta = self.valence - valence_before
-        # IMPORTANT: compare against the *previous* delta before overwriting it.
-        # This used to assign self.last_action_valence_delta = valence_delta
-        # here, then compare abs(valence_delta) > abs(self.last_action_valence_delta)
-        # further down — comparing valence_delta against itself, which is never
-        # true. peak_introspection was therefore never being set, and memory
-        # transfer at death was silently always falling back to "last
-        # introspection" rather than "most emotionally significant one."
-        is_new_peak = abs(valence_delta) > abs(self.last_action_valence_delta)
-        self.last_action_valence_delta = valence_delta
+        # Compare against the true lifetime-maximum magnitude seen so far
+        # (self.peak_valence_delta, monotonic — never decreases), not against
+        # self.last_action_valence_delta, which is just "the previous step's
+        # delta" and gets overwritten every step. Comparing against that only
+        # ever answers "did this step swing more than the last one?", not
+        # "is this the biggest swing of this agent's whole life?" — the two
+        # give different answers whenever a large swing is followed by a
+        # string of smaller-but-still-locally-increasing ones (e.g. 0.3 then
+        # 0.05 then 0.06: the 0.06 step would wrongly register as a new peak
+        # and silently overwrite the 0.3 moment's introspection).
+        is_new_peak = abs(valence_delta) > self.peak_valence_delta
+        if is_new_peak:
+            self.peak_valence_delta = abs(valence_delta)
+        self.last_action_valence_delta = valence_delta  # kept for diagnostics/logging only
 
         location = (
             f"in {self.current_place}" if (self.in_place and self.current_place)
@@ -985,6 +1022,7 @@ Step: {step}
         if recent_birth:
             relationship_section += f"\n=== JUST HAPPENED ===\n{recent_birth}\n"
             self._recent_birth_note = ""  # Reset after use
+            self._birth_note_pending = ""  # Reset pending flag (belongs with the above, not with ancestral_memories below)
 
         # Ancestral memories ("seven generations", 011): shown only during
         # early life (first 30 steps), so a young Lumis has a chance to
@@ -996,7 +1034,6 @@ Step: {step}
                 for e in self.ancestral_memories
             )
             relationship_section += f"\n=== MOMENTS CARRIED FROM YOUR ANCESTORS ===\n{lines}\n"
-            self._birth_note_pending = ""  # Reset pending flag
 
         prompt = f"""You are {self.display_name}, {location}. Step {step}.
 
