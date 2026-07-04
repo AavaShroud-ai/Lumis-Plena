@@ -162,6 +162,7 @@ Lumis-Plena/
 ├── lumis-moon/
 │   ├── simulation.py           # Core simulation loop
 │   ├── agent.py                # Agent cognition, memory, and introspection
+│   ├── rules.py                # Shared reproduction-timing constants (single source of truth for agent.py + simulation.py)
 │   ├── visualization.py        # Statistics and frame generation
 │   ├── main.py                 # Entry point
 │   ├── ollama_client.py        # LLM interface
