@@ -56,7 +56,7 @@ day_night_cycle:
   intensity: 0.9
   radius: 50
 
-# Solar Flare Events (occur during daytime, damage agents outside bases)
+# Solar Flare Events (fixed step timestamps, independent of day/night; damage agents outside bases and not sheltering)
 # warning_steps: how many steps before the flare to emit electromagnetic noise warning
 solar_flares:
   - name: "flare_1"

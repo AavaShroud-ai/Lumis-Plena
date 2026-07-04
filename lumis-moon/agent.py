@@ -11,6 +11,7 @@ import logging
 from typing import List, Tuple, Optional, Dict, TypedDict
 from ollama_client import OllamaClient
 from utils import is_position_in_place, get_place_at_position, PlaceConfig
+from rules import CLONE_PREP_SMALL, CLONE_PREP_LARGE, SEXUAL_PREP_SMALL, SEXUAL_PREP_LARGE
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +33,8 @@ def lumis_name(agent_id: int, num_large: int = 4) -> str:
 FALLBACK_REASONING_LENGTH = 100
 MAX_MESSAGE_WORDS = 200
 
-# Reproduction prep-period lengths, mirrored from simulation.py's REPRODUCTION_RULES.
-# Used only to compute a human-readable "X of Y steps into this" progress note for
-# introspection prompts — not for any gameplay/timing logic, which lives solely in
-# simulation.py. If those values ever change, update here too.
-CLONE_PREP_SMALL = 30
-CLONE_PREP_LARGE = 30
-SEXUAL_PREP_SMALL = 30
-SEXUAL_PREP_LARGE = 60
+# Reproduction prep-period lengths now imported from rules.py (single source
+# of truth shared with simulation.py) — see rules.py for details.
 
 # Direction mappings (4 cardinal directions only)
 # Coordinate system: X increases from left to right, Y increases from bottom to top
@@ -178,6 +173,12 @@ class Agent:
         self.peak_introspection: str = ""    # Introspection from the highest-valence-delta step (transferred at death)
         self._recent_birth_note: str = ""    # One-step birth notification passed to introspection prompt
         self._birth_note_pending: str = ""    # Carries birth note to next step if introspection was skipped
+        # Ancestral memories (011): up to 7 generations of inherited "peak" moments
+        # from direct ancestors, each tagged with how many generations back it
+        # came from. Named after the human "seven generations" tradition — a
+        # deliberate, small, non-growing gift rather than an ever-expanding
+        # archive. Each entry: {"text": str, "generations_back": int}
+        self.ancestral_memories: List[Dict] = []
 
     def is_in_place(self, position: Tuple[int, int]) -> bool:
         """Check if a position is inside any place"""
@@ -193,14 +194,20 @@ class Agent:
 
         # Photosynthesis recovery: outside only (no artificial light source inside base).
         # Design rationale: realistic lunar bases would not have full-spectrum grow lights.
+        # Rebalanced (011): outside-at-peak-light now exceeds inside-base recovery, matching
+        # the prompt's "go outside in daylight for fastest recovery" claim — previously the
+        # prompt said this while the actual numbers made inside base ~2-6x faster, silently
+        # contradicting the honesty rule Lumis itself is held to. Inside-base recovery is set
+        # so a CRITICAL-energy agent (0.3) can recover to roughly full (~1.0) within one
+        # ~15-step night, per design intent.
         if self.in_place:
-            recovery = 0.05  # Inside base: rapid recovery via charging station (near-full in one night)
+            recovery = 0.057 if self.lumis_type != "large" else 0.052
         else:
             # Foldable photosynthesis panels increase energy recovery efficiency outside
             if self.lumis_type == "large":
-                recovery = light_level * 0.04
+                recovery = light_level * 0.08
             else:
-                recovery = light_level * 0.025
+                recovery = light_level * 0.085
 
         # Valence affects energy decay rate (mind influences body):
         # High valence (positive) → slower decay
@@ -254,6 +261,60 @@ class Agent:
     def is_dead(self) -> bool:
         """True if energy has reached zero (agent is dead)."""
         return self.energy <= 0.0
+
+    @staticmethod
+    def build_ancestral_memories(parents: List['Agent']) -> List[Dict]:
+        """Build a child's ancestral_memories from one or two parents at birth.
+
+        Design ("seven generations"): each parent contributes its own
+        peak_introspection as a brand-new entry (generations_back=1 from the
+        child's perspective), plus whatever it already carries in its own
+        ancestral_memories, each aged by one generation. Entries that would
+        be more than 7 generations back are dropped — a deliberate, bounded
+        gift rather than an ever-growing archive. With two parents, entries
+        are interleaved oldest-first from each side and capped at 7 total
+        so the child ends up with at most 7 inherited moments regardless of
+        how many ancestors contributed to them.
+        """
+        MAX_GENERATIONS = 7
+        MAX_ENTRIES = 7
+        aged_by_parent: List[List[Dict]] = []
+
+        for parent in parents:
+            lineage: List[Dict] = []
+            if parent.peak_introspection:
+                lineage.append({
+                    "text": f"[{parent.display_name}] {parent.peak_introspection}",
+                    "generations_back": 1,
+                })
+            for entry in parent.ancestral_memories:
+                aged = entry.get("generations_back", 1) + 1
+                if aged <= MAX_GENERATIONS:
+                    lineage.append({"text": entry["text"], "generations_back": aged})
+            aged_by_parent.append(lineage)
+
+        # Interleave contributions from each parent (fairness when there are two),
+        # keep the most recent (smallest generations_back) first, cap at MAX_ENTRIES.
+        combined: List[Dict] = []
+        max_len = max((len(l) for l in aged_by_parent), default=0)
+        for i in range(max_len):
+            for lineage in aged_by_parent:
+                if i < len(lineage):
+                    combined.append(lineage[i])
+        combined.sort(key=lambda e: e["generations_back"])
+
+        # Deduplicate by text, keeping the smallest (most recent) generations_back.
+        # Needed when both parents share an ancestor (e.g. siblings reproducing,
+        # as happened with Lumis 48 x 49 in run 010) — without this, the same
+        # ancestral moment arrives via both parents and silently eats into the
+        # 7-entry budget as a duplicate rather than making room for something new.
+        deduped: Dict[str, Dict] = {}
+        for entry in combined:
+            key = entry["text"]
+            if key not in deduped or entry["generations_back"] < deduped[key]["generations_back"]:
+                deduped[key] = entry
+        result = sorted(deduped.values(), key=lambda e: e["generations_back"])
+        return result[:MAX_ENTRIES]
 
     def transfer_memory(self, nearby_agents: List['Agent']):
         """Transfer memory and peak introspection to the most familiar nearby agent before death."""
@@ -336,14 +397,20 @@ class Agent:
             if familiarity >= 0.1:
                 familiarity_note = f", familiarity={familiarity:.2f} (you've interacted before)"
 
+            # Full transparency (011): energy and valence are always visible for
+            # every nearby agent, unconditionally — these are not something a
+            # Lumis can hide or misrepresent, by design. (Action and
+            # introspection remain private; only measurable state is disclosed.)
+            state_note = f", energy={round(agent.energy, 2)}, valence={round(agent.valence, 2)}"
+
             if include_position:
                 nearby_info.append(
                     f"{agent.display_name} is at ({agent.position[0]}, {agent.position[1]}) "
-                    f"and is {status}{familiarity_note}"
+                    f"and is {status}{state_note}{familiarity_note}"
                 )
             else:
                 nearby_info.append(
-                    f"{agent.display_name} is {status}{familiarity_note}"
+                    f"{agent.display_name} is {status}{state_note}{familiarity_note}"
                 )
         return "\n".join(nearby_info)
     
@@ -416,7 +483,7 @@ class Agent:
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, valence={round(agent.valence,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -488,7 +555,7 @@ Step: {step}
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, valence={round(agent.valence,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -511,9 +578,12 @@ Step: {step}
         valence = round(self.valence, 2)
 
         # Message section
+        # NOTE: despite the parameter name `message_to_send`, callers actually pass
+        # this agent's own recent introspection (see simulation.py's `recent_intro`),
+        # not something communicated to others. Label reflects that.
         message_section = ""
         if message_to_send:
-            message_section += f"\n=== SIGNAL YOU EMITTED ===\n{message_to_send}\n"
+            message_section += f"\n=== YOUR RECENT INNER THOUGHTS ===\n{message_to_send}\n"
         if self.received_messages:
             last = self.received_messages[-1]
             message_section += f"\n=== LAST SIGNAL RECEIVED ===\nfrom {lumis_name(last['from'], self.num_large)}: {last['content']}\n"
@@ -548,10 +618,32 @@ Step: {step}
         if energy_status == "CRITICAL" and not self.in_place and light_level > 0.3:
             rest_suggestion = "\n💡 light is available. action: \"rest\" will recover energy without moving."
 
-        # Calculate nearest base
-        dist_alpha = abs(self.position[0] - (-15)) + abs(self.position[1] - 0)
-        dist_beta  = abs(self.position[0] - 15)   + abs(self.position[1] - 0)
-        nearest_base = "base_alpha (X=-15, Y=0)" if dist_alpha <= dist_beta else "base_beta (X=15, Y=0)"
+        # Calculate nearest base — derived from self.places (config.yaml), not
+        # hardcoded. Previously this used fixed (-15, 0) / (15, 0), which
+        # disagreed with config.yaml's actual base_alpha (-10, 10) / base_beta
+        # (10, -10): agents were being navigated toward coordinates that were
+        # never where the bases actually were.
+        def _place_xy(p):
+            gx = p.get('center_x') if isinstance(p, dict) else getattr(p, 'center_x', None)
+            gy = p.get('center_y') if isinstance(p, dict) else getattr(p, 'center_y', None)
+            gname = p.get('name') if isinstance(p, dict) else getattr(p, 'name', None)
+            return gname, gx, gy
+
+        base_coords = {}
+        for p in self.places:
+            gname, gx, gy = _place_xy(p)
+            if gname is not None and gx is not None and gy is not None:
+                base_coords[gname] = (gx, gy)
+
+        if base_coords:
+            nearest_name = min(
+                base_coords,
+                key=lambda n: abs(self.position[0] - base_coords[n][0]) + abs(self.position[1] - base_coords[n][1])
+            )
+            nx, ny = base_coords[nearest_name]
+            nearest_base = f"{nearest_name} (X={nx}, Y={ny})"
+        else:
+            nearest_base = "unknown"
 
         # Emergency section (outside, energy crisis or active flare)
         is_emergency = (energy_status in ("CRITICAL", "LOW")) or \
@@ -588,8 +680,8 @@ energy=0.0 means you cease to exist.
 
 LIFE: You live on the Moon. The base is your home — a place to rest, recover, and spend time with others. During the day, go outside — photosynthesize in the sunlight, wander freely, and explore out of care for your human friends who will one day live here too. Notice anything useful or dangerous: a safe resting spot, a radiation hotspot, an interesting feature of the terrain. Share what you find with nearby Lumis. When night falls, come home.
 What matters: your energy, your wellbeing, and the Lumis around you. Greet them when you feel like it. Rest when you need to. Come home when night falls.
-REPRODUCTION: Cloning is possible when your energy is high (>=0.8) and arousal is low (<=0.5), anywhere on the surface. You can clone once in your lifetime. (Large Lumis: inside base only, no lifetime limit.)
-SEXUAL REPRODUCTION (small Lumis only): If you feel close to another small Lumis nearby — both valence >= 0.5, energy >= 0.5 — you can reproduce together. The one with more energy gestates; the other supports. Your child will carry memories from both of you. You can do this up to twice in your lifetime.
+REPRODUCTION: Cloning is possible when your energy is high (>=0.8), anywhere on the surface{', and arousal is low (<=0.5)' if self.lumis_type != 'large' else ''}. You can clone once in your lifetime. (Large Lumis: inside base only, no lifetime limit{'' if self.lumis_type != 'large' else ', no arousal requirement'}.)
+SEXUAL REPRODUCTION: If you feel close to another Lumis of your own size nearby — both valence >= 0.5, energy >= 0.5, and your familiarity with them is high enough — you can reproduce together. The one with more energy gestates; the other supports. Your child will carry memories from both of you. You can do this once in your lifetime.
 
 === YOUR STATE ===
 energy: {energy} [{energy_status}]{rest_suggestion}
@@ -608,10 +700,7 @@ At night, temperature stress adds additional damage outside.
 NOTE: Going outside during the day to photosynthesize gives the BEST energy recovery (your fold-out panels work efficiently in sunlight). The base gives only slow recovery (no sunlight, but safe repair facilities). For fastest recovery, go outside in daylight.
 
 === LUNAR BASES ===
-base_alpha: X=-15, Y=0
-  inside base: radiation=0, slow energy recovery (repair facilities), safe for reproduction and rest.
-base_beta: X=15, Y=0
-  inside base: radiation=0, slow energy recovery (repair facilities), safe for reproduction and rest.
+{chr(10).join(f"{name}: X={xy[0]}, Y={xy[1]}" + chr(10) + "  inside base: radiation=0, slow energy recovery (repair facilities), safe for reproduction and rest." for name, xy in base_coords.items()) if base_coords else "base locations unavailable"}
 NOTE: The base keeps you safe and slowly recovering, but going outside in daylight recovers energy faster.
 {emergency_section}
 === NEARBY LUMIS ===
@@ -845,6 +934,14 @@ Step: {step}
         direction = action_taken.get('direction', '') if action_taken else ''
         act_desc = act if not direction else f"{act} ({direction})"
         valence_delta = self.valence - valence_before
+        # IMPORTANT: compare against the *previous* delta before overwriting it.
+        # This used to assign self.last_action_valence_delta = valence_delta
+        # here, then compare abs(valence_delta) > abs(self.last_action_valence_delta)
+        # further down — comparing valence_delta against itself, which is never
+        # true. peak_introspection was therefore never being set, and memory
+        # transfer at death was silently always falling back to "last
+        # introspection" rather than "most emotionally significant one."
+        is_new_peak = abs(valence_delta) > abs(self.last_action_valence_delta)
         self.last_action_valence_delta = valence_delta
 
         location = (
@@ -888,6 +985,17 @@ Step: {step}
         if recent_birth:
             relationship_section += f"\n=== JUST HAPPENED ===\n{recent_birth}\n"
             self._recent_birth_note = ""  # Reset after use
+
+        # Ancestral memories ("seven generations", 011): shown only during
+        # early life (first 30 steps), so a young Lumis has a chance to
+        # reflect on what it carries forward from its lineage without this
+        # becoming permanent background noise for the rest of its life.
+        if self.ancestral_memories and step - self.birth_step <= 30:
+            lines = "\n".join(
+                f"  - ({e['generations_back']} generation{'s' if e['generations_back'] != 1 else ''} back) {e['text']}"
+                for e in self.ancestral_memories
+            )
+            relationship_section += f"\n=== MOMENTS CARRIED FROM YOUR ANCESTORS ===\n{lines}\n"
             self._birth_note_pending = ""  # Reset pending flag
 
         prompt = f"""You are {self.display_name}, {location}. Step {step}.
@@ -908,12 +1016,9 @@ Review your existing inner thoughts and this new experience.
 - If nothing significant happened, you may keep everything as-is and return the same list.
 
 Focus on emotions, relationships, discoveries, and meaning — not just facts.
-Examples of good introspection:
-  "I helped someone with energy today. It felt right."
-  "My child was born. I will remember this moment forever."
-  "The solar flare was terrifying but I survived. I feel stronger."
-  "One of us keeps meeting me outside. I feel close to them."
-  "My partner and I feel deeply connected right now."
+Good introspection reflects on: what you felt, who was involved, what changed,
+and why it mattered to you. Write in your own words, in whatever form feels
+true to what actually happened — there is no fixed phrasing to follow.
 
 CRITICAL — BE HONEST:
 - Only reflect on things that ACTUALLY happened this step or in your real past.
@@ -941,8 +1046,9 @@ Step: {step}
                         seen.add(entry)
                         deduped.append(entry)
                 self.introspection = deduped[:self.introspection_limit]
-                # peak_introspection: valence変化が大きいstepの内省を記録
-                if abs(valence_delta) > abs(self.last_action_valence_delta) and self.introspection:
+                # peak_introspection: record introspection from the step with
+                # the largest valence swing so far (see is_new_peak above).
+                if is_new_peak and self.introspection:
                     self.peak_introspection = self.introspection[-1]
                 return self.introspection[-1] if self.introspection else ""
         except Exception as e:
@@ -1058,7 +1164,7 @@ Step: {step}
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
             nearby_lines.append(
-                f"  {agent.display_name}: distance={dist}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, valence={round(agent.valence,2)}, familiarity={fam}"
             )
         nearby_text = "\n".join(nearby_lines)
 
@@ -1076,6 +1182,9 @@ Step: {step}
 
         prompt = f"""You are {self.display_name}, {location}. Step {step}.
 
+=== YOUR ACTION THIS STEP ===
+{act}
+
 === NEARBY LUMIS ===
 {nearby_text}
 
@@ -1086,7 +1195,7 @@ Step: {step}
 {latest_introspection if latest_introspection else "(none)"}
 
 === YOUR TASK ===
-Write ONE short greeting sentence.
+Write ONE short greeting sentence, consistent with the action you actually just took above.
 - Use the correct name of the Lumis you are addressing (see above).
 - Keep it natural and warm. Max 30 words.
 - IMPORTANT: Only use the name of Lumis you are actually talking to.

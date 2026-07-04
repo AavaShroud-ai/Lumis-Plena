@@ -15,6 +15,7 @@ import numpy as np
 from agent import lumis_name, Agent
 from ollama_client import OllamaClient
 from utils import is_position_in_place, get_place_at_position, PlaceConfig, FireConfig
+from rules import CLONE_PREP_SMALL, CLONE_PREP_LARGE, SEXUAL_PREP_SMALL, SEXUAL_PREP_LARGE
 
 logger = logging.getLogger(__name__)
 
@@ -480,23 +481,22 @@ class Simulation:
                         if is_night:
                             agent.energy = max(0.0, agent.energy - 0.003)  # Nighttime thermal fatigue
 
-        # Energy processing during child-rearing
+        # Energy processing during child-rearing.
+        # Gates on rearing_until_step directly, not agent.reproducing — reproducing
+        # is set to False the instant birth completes (Phase 4a, end of this same
+        # step function), so gating on it here meant this compensation could only
+        # ever fire for the one step birth happened on, never for the other ~29
+        # steps of the intended 30-step rearing window.
         for agent in self.agents:
-            if not agent.reproducing:
+            if self.step > getattr(agent, 'rearing_until_step', -1):
                 continue
-            if agent.reproduction_type == "clone":
-                prep = 30  # Preparation period (same for large and small)
-            else:
-                prep = 60 if agent.lumis_type == "large" else 30  # SEXUAL_PREP
-            rearing_start = agent.reproduction_start_step + prep
-            in_rearing = self.step >= rearing_start
-            if in_rearing:
-                if agent.is_gestating:
-                    # Gestating parent: energy decay compensation
-                    agent.energy = min(agent.energy_capacity, agent.energy + 0.005)
-                elif agent.reproduction_type == "sexual_support":
-                    # Supporting parent: bonus energy recovery
-                    agent.energy = min(agent.energy_capacity, agent.energy + 0.01)
+            last_type = getattr(agent, 'last_reproduction_type', None)
+            if last_type in ('sexual', 'clone'):
+                # Gestating parent (sexual) or solo clone parent: energy decay compensation
+                agent.energy = min(agent.energy_capacity, agent.energy + 0.005)
+            elif last_type == 'sexual_support':
+                # Supporting parent: bonus energy recovery
+                agent.energy = min(agent.energy_capacity, agent.energy + 0.01)
 
         # Large Lumis during child-rearing: restrict movement outside base
         # Movement is handled within Phase 2
@@ -1062,10 +1062,8 @@ class Simulation:
         CLONE_COOLDOWN_SMALL = 60  # 小型クローンクールダウン
         CLONE_COOLDOWN_LARGE = 300 # 大型クローンクールダウン
         SEXUAL_COOLDOWN = 60       # Sexual reproductionクールダウン
-        CLONE_PREP_SMALL = 30      # 小型クローン準備期間
-        CLONE_PREP_LARGE = 30      # 大型クローン準備期間
-        SEXUAL_PREP_SMALL = 30     # 小型有性生殖準備期間
-        SEXUAL_PREP_LARGE = 60     # 大型有性生殖準備期間
+        # CLONE_PREP_SMALL / CLONE_PREP_LARGE / SEXUAL_PREP_SMALL / SEXUAL_PREP_LARGE
+        # now imported from rules.py (single source of truth shared with agent.py)
         CHILD_REARING_STEPS = 30   # Child-rearing period (steps)
 
         # Single source of truth for everything that differs between large and
@@ -1156,6 +1154,7 @@ class Simulation:
                 child.birth_step = self.step
                 child.memory = list(agent.memory)
                 child.parent_ids = [agent.id]
+                child.ancestral_memories = Agent.build_ancestral_memories([agent])
                 agent.energy -= 0.2
                 agent.rearing_until_step = self.step + 30  # 親も30step薄ピンク表示
                 new_agents.append(child)
@@ -1202,6 +1201,7 @@ class Simulation:
                         child.birth_step = self.step
                         child.memory = memory_sets[i][:self.memory_limit]
                         child.parent_ids = [agent.id, partner.id]
+                        child.ancestral_memories = Agent.build_ancestral_memories([agent, partner])
                         new_agents.append(child)
                         children.append(child)
 
@@ -1298,6 +1298,14 @@ class Simulation:
                 if is_reproduction_ready:
                     familiarity_threshold = rules["sexual_familiarity_threshold"]
                     maturity_threshold = rules["maturity"]
+                    # NOTE: familiarity check below is one-directional — only
+                    # agent's familiarity toward the candidate is required, not
+                    # the candidate's familiarity toward agent. This is left
+                    # intentional, not fixed to require mutual familiarity: it's
+                    # the same asymmetry that produced the L2→L0 dynamic in runs
+                    # 009/010 (one-sided attention despite both being eligible
+                    # partners). Making this mutual would be a real, separate
+                    # experimental variable, not a bug fix.
                     nearby = [
                         a for a in self.agents
                         if a.id != agent.id

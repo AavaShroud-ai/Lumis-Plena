@@ -691,32 +691,42 @@ class Visualizer:
                 if place_name in stats['places']:
                     place_stats = stats['places'][place_name]
 
+                    # Occupancy rate stays on the left axis (0-1 range).
+                    # Agent count previously shared this same axis and its
+                    # ylim(0,1) — with run 010 peaking at 92 agents, that line
+                    # was clipped flat at y=1 and effectively invisible. Given
+                    # its own right-hand axis instead.
+                    ax_left = axes[plot_idx]
+                    ax_left.set_ylim(0, 1)
+                    ax_right = ax_left.twinx()
+
                     # Plot occupancy
                     if place_stats['occupancy']:
                         steps = range(len(place_stats['occupancy']))
                         color = place_colors[i % len(place_colors)]
-                        axes[plot_idx].plot(
+                        ax_left.plot(
                             steps, place_stats['occupancy'],
                             color=color, alpha=0.7,
                             label=f'{place_name} Occupancy'
                         )
 
-                    # Plot agents count
                     if place_stats['agents_in_place']:
                         steps = range(len(place_stats['agents_in_place']))
                         color = place_colors[i % len(place_colors)]
-                        axes[plot_idx].plot(
+                        ax_right.plot(
                             steps, place_stats['agents_in_place'],
                             color=color, alpha=0.5, linestyle=':',
                             label=f'{place_name} Agents'
                         )
-                    
-                    axes[plot_idx].set_xlabel('Step')
-                    axes[plot_idx].set_ylabel('Occupancy / Agents')
-                    axes[plot_idx].set_title(f'{place_name} Statistics Over Time')
-                    axes[plot_idx].legend()
-                    axes[plot_idx].grid(True, alpha=0.3)
-                    axes[plot_idx].set_ylim(0, 1)
+
+                    ax_left.set_xlabel('Step')
+                    ax_left.set_ylabel('Occupancy Rate (0-1)')
+                    ax_right.set_ylabel('Agents in Place (count)')
+                    ax_left.set_title(f'{place_name} Statistics Over Time')
+                    lines_left, labels_left = ax_left.get_legend_handles_labels()
+                    lines_right, labels_right = ax_right.get_legend_handles_labels()
+                    ax_left.legend(lines_left + lines_right, labels_left + labels_right)
+                    ax_left.grid(True, alpha=0.3)
                     plot_idx += 1
 
         # Plot fire statistics
