@@ -422,8 +422,13 @@ class Visualizer:
                 linewidths=1.5
             )
 
-            # Add Lumis ID label
-            label = lumis_name(agent.id)
+            # Add Lumis ID label — use the agent's own display_name (set correctly
+            # at construction time with the real num_large) rather than
+            # recomputing lumis_name(agent.id) here with its default num_large=4.
+            # Recomputing it was the same class of bug as the run-009 L2/L3
+            # mislabeling: this file never picked up that fix because it wasn't
+            # reading from the agent object at all.
+            label = getattr(agent, 'display_name', None) or lumis_name(agent.id)
             self.ax.text(
                 agent.position[0] + ox + 0.5,
                 agent.position[1] + oy + 0.5,
