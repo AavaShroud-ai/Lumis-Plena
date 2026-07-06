@@ -12,6 +12,6 @@ silently desync from the other. Now there is exactly one place to change them.
 """
 
 CLONE_PREP_SMALL = 30      # 小型クローン準備期間
-CLONE_PREP_LARGE = 30      # 大型クローン準備期間
+CLONE_PREP_LARGE = 45      # 大型クローン準備期間（011: sexual_prepと統一）
 SEXUAL_PREP_SMALL = 30     # 小型有性生殖準備期間
-SEXUAL_PREP_LARGE = 60     # 大型有性生殖準備期間
+SEXUAL_PREP_LARGE = 45     # 大型有性生殖準備期間（011: clone_prepと統一）

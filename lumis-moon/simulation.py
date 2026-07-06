@@ -1176,11 +1176,13 @@ class Simulation:
         MATURITY_SMALL = 60        # 小型成熟期間
         MATURITY_LARGE = 180       # 大型成熟期間
         CLONE_COOLDOWN_SMALL = 60  # 小型クローンクールダウン
-        CLONE_COOLDOWN_LARGE = 300 # 大型クローンクールダウン
-        SEXUAL_COOLDOWN = 60       # Sexual reproductionクールダウン
+        CLONE_COOLDOWN_LARGE = 210 # 大型クローンクールダウン（011: 生涯1回ずつクローン+ペア生殖に挑戦できるよう、300から短縮）
+        SEXUAL_COOLDOWN_SMALL = 60  # 小型有性生殖クールダウン
+        SEXUAL_COOLDOWN_LARGE = 210 # 大型有性生殖クールダウン（011: clone_cooldownと統一、300から短縮）
         # CLONE_PREP_SMALL / CLONE_PREP_LARGE / SEXUAL_PREP_SMALL / SEXUAL_PREP_LARGE
         # now imported from rules.py (single source of truth shared with agent.py)
-        CHILD_REARING_STEPS = 30   # Child-rearing period (steps)
+        CHILD_REARING_STEPS_SMALL = 30   # 小型育児期間
+        CHILD_REARING_STEPS_LARGE = 45   # 大型育児期間（011: prep/cooldownと統一）
 
         # Single source of truth for everything that differs between large and
         # small Lumis in the reproduction system. Previously these values were
@@ -1195,25 +1197,38 @@ class Simulation:
             "small": {
                 "maturity": MATURITY_SMALL,
                 "clone_cooldown": CLONE_COOLDOWN_SMALL,
+                "sexual_cooldown": SEXUAL_COOLDOWN_SMALL,
                 "clone_prep": CLONE_PREP_SMALL,
                 "sexual_prep": SEXUAL_PREP_SMALL,
+                "rearing_steps": CHILD_REARING_STEPS_SMALL,
                 "sexual_familiarity_threshold": 0.1,
                 "clone_requires_in_place": False,
                 "clone_lifetime_limit": 1,  # None below means "no limit" (large Lumis)
+                "sexual_lifetime_limit": 1,
                 "clone_arousal_threshold": 0.5,  # kept: original "calm before cloning" /
                                                   # anti-idling design intent still applies
             },
             "large": {
                 "maturity": MATURITY_LARGE,
                 "clone_cooldown": CLONE_COOLDOWN_LARGE,
+                "sexual_cooldown": SEXUAL_COOLDOWN_LARGE,
                 "clone_prep": CLONE_PREP_LARGE,
                 "sexual_prep": SEXUAL_PREP_LARGE,
+                "rearing_steps": CHILD_REARING_STEPS_LARGE,
                 # Large Lumis are stationed together and greet everyone constantly,
                 # so their familiarity climbs fast — raise the bar so pairing still
                 # reflects a real distinction rather than proximity alone.
                 "sexual_familiarity_threshold": 0.5,
                 "clone_requires_in_place": True,
-                "clone_lifetime_limit": None,
+                # 011: previously None (no lifetime limit) — this let a single
+                # large Lumis clone repeatedly throughout the run once the
+                # arousal block (the thing that had silently prevented cloning
+                # in runs 009/010) was lifted. Equalized with sexual (1 each),
+                # matching small Lumis and closing the loop this run's data
+                # revealed: unlimited cloning combined with a 300-step cooldown
+                # still allowed 2+ clone events per large Lumis within 500 steps.
+                "clone_lifetime_limit": 1,
+                "sexual_lifetime_limit": 1,
                 # Removed for run 011: large Lumis are stationed at the base center,
                 # constantly greeted by everyone nearby, so arousal (driven by nearby
                 # agent count) climbs structurally and stays high — run 010 showed
@@ -1272,14 +1287,14 @@ class Simulation:
                 child.parent_ids = [agent.id]
                 child.ancestral_memories = Agent.build_ancestral_memories([agent])
                 agent.energy -= 0.2
-                agent.rearing_until_step = self.step + 30  # 親も30step薄ピンク表示
+                agent.rearing_until_step = self.step + rules["rearing_steps"]  # 薄ピンク表示期間（サイズ別）
                 new_agents.append(child)
                 location_label = agent.current_place if agent.in_place else f"outside ({agent.position[0]}, {agent.position[1]})"
                 logger.info(
-                    f"Step {self.step}: [CLONE] {lumis_name(new_id)} born from {lumis_name(agent.id)} "
+                    f"Step {self.step}: [CLONE] {child.display_name} born from {agent.display_name} "
                     f"({agent.lumis_type}) at {location_label}. memory={len(child.memory)} entries."
                 )
-                agent._recent_birth_note = f"Your clone, {lumis_name(new_id)}, was just born. This is your child."
+                agent._recent_birth_note = f"Your clone, {child.display_name}, was just born. This is your child."
                 agent._birth_note_pending = agent._recent_birth_note
 
             elif agent.reproduction_type == "sexual":
@@ -1408,12 +1423,13 @@ class Simulation:
                 # 小型：energy≥0.5、valence≥0.5、familiarity≥0.1、成熟済み、クールダウン完了、生涯1回まで
                 # 大型：energy≥0.5、valence≥0.5、familiarity≥0.5（大型同士は自然と親密度が高いため閾値を上げる）、生涯1回まで
                 # サイズ同士のみ（大×大、小×小）、基地内外どちらでも可
+                sexual_cooldown_ok = (self.step - agent.last_reproduction_step) >= rules["sexual_cooldown"]
                 is_reproduction_ready = (
-                    agent.sexual_count < 1 and
+                    agent.sexual_count < rules["sexual_lifetime_limit"] and
                     agent.valence >= 0.5 and
                     agent.energy >= 0.5 and
                     mature and
-                    cooldown_ok and
+                    sexual_cooldown_ok and
                     not getattr(agent, 'is_sheltering', False)
                 )
                 if is_reproduction_ready:
@@ -1437,9 +1453,9 @@ class Simulation:
                         and a.valence >= 0.5
                         and a.energy >= 0.5
                         and (self.step - a.birth_step) >= maturity_threshold
-                        and (self.step - a.last_reproduction_step) >= SEXUAL_COOLDOWN
+                        and (self.step - a.last_reproduction_step) >= REPRODUCTION_RULES[a.lumis_type]["sexual_cooldown"]
                         and not getattr(a, 'is_sheltering', False)
-                        and a.sexual_count < 1  # supporting側も1回まで
+                        and a.sexual_count < REPRODUCTION_RULES[a.lumis_type]["sexual_lifetime_limit"]
                     ]
                     if nearby:
                         partner = max(nearby, key=lambda a: agent.get_familiarity_score(a.id))
@@ -1475,8 +1491,8 @@ class Simulation:
 
                         loc = gestating.current_place if gestating.in_place else f"outside ({gestating.position[0]}, {gestating.position[1]})"
                         logger.info(
-                            f"Step {self.step}: [SEXUAL_START] Lumis {gestating.id} (gestating) x "
-                            f"Lumis {supporting.id} (supporting) at {loc}, "
+                            f"Step {self.step}: [SEXUAL_START] {gestating.display_name} ({gestating.lumis_type}, gestating) x "
+                            f"{supporting.display_name} ({supporting.lumis_type}, supporting) at {loc}, "
                             f"familiarity={agent.get_familiarity_score(partner.id):.2f}. "
                             f"Will complete at step {self.step + prep}."
                         )

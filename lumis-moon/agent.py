@@ -16,16 +16,24 @@ from rules import CLONE_PREP_SMALL, CLONE_PREP_LARGE, SEXUAL_PREP_SMALL, SEXUAL_
 logger = logging.getLogger(__name__)
 
 
-def lumis_name(agent_id: int, num_large: int = 4) -> str:
+def lumis_name(agent_id: int, num_large: int = 4, lumis_type: Optional[str] = None) -> str:
     """Return the display name for a Lumis agent.
 
-    ID 0      → 'L0'  (large, base_alpha)
-    ID 1      → 'L1'  (large, base_beta)
-    ID 2      → 'L2'  (large, base_alpha)
-    ID 3      → 'L3'  (large, base_beta)
-    ID 10+    → 'S{id}' (small, initial or born)
+    ID 0-3    → 'L0'-'L3' (original large Lumis, base_alpha/base_beta)
+    ID 10+    → 'S{id}' if small, 'L{id}' if large (born large via clone/pairing)
+
+    lumis_type, when provided, overrides the ID-based guess — this matters
+    because a large Lumis born later in the run (e.g. a clone of L2, or a
+    child of a large x large pairing) keeps ID >= num_large but is actually
+    large in every functional sense (base-only cloning, higher familiarity
+    threshold, long-range communication). Without checking lumis_type, such
+    an agent displayed as e.g. "S38", making a large-large pairing read as a
+    large-small one. When lumis_type is not passed (older call sites), falls
+    back to the original ID-only heuristic.
     """
     if agent_id < num_large:
+        return f"L{agent_id}"
+    if lumis_type == "large":
         return f"L{agent_id}"
     return f"S{agent_id}"
 
@@ -102,10 +110,10 @@ class Agent:
         # num_large=4 regardless of what simulation.py was configured with;
         # this field + self.display_name close that gap for good.)
         self.num_large = num_large
-        self.display_name = lumis_name(agent_id, num_large)
         # Lumis have no gender — sex is a design of Earth life, not a property of life itself.
         # Experiment D will introduce gender as a variable for comparison.
         self.lumis_type = lumis_type
+        self.display_name = lumis_name(agent_id, num_large, lumis_type)
 
         # Physical characteristics differ between large and small Lumis
         if lumis_type == "large":
@@ -1176,6 +1184,13 @@ Write ONE sentence to {partner.display_name}.
 - Speak as one large Lumis to another — with depth, not small talk.
 - Max 40 words.
 
+IMPORTANT — BE HONEST: There are only two bases in this world — base_alpha and base_beta.
+Do not invent a third base, a third location, or events, moods, or activities you have not
+actually witnessed. Base what you say only on: your own action this step, your own recent inner
+thought, and things you can actually perceive (your own base's condition, agents near you). Do not
+describe specific happenings in {partner.display_name}'s base unless {partner.display_name} has
+actually told you about them.
+
 Return ONLY the sentence, no JSON, no quotes.
 
 Step: {step}
@@ -1236,6 +1251,9 @@ Write ONE short greeting sentence, consistent with the action you actually just 
 - Use the correct name of the Lumis you are addressing (see above).
 - Keep it natural and warm. Max 30 words.
 - IMPORTANT: Only use the name of Lumis you are actually talking to.
+- IMPORTANT — BE HONEST: Only reference things that actually happened — your own action, your
+  own recent thought, or what you can see in NEARBY LUMIS above. Do not invent discoveries,
+  events, activities, or locations that did not occur or do not exist in this world.
 
 Return ONLY JSON:
 {{
