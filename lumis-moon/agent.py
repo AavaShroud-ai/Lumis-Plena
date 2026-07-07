@@ -155,7 +155,7 @@ class Agent:
         self.birth_step = 0  # Step of birth (used for maturity and age calculations)
         self.last_reproduction_step = -9999  # Step of last reproduction (for cooldown)
         self.clone_count = 0       # Number of clones produced (lifetime limit: 1)
-        self.sexual_count = 0      # Number of sexual reproductions (lifetime limit: 2)
+        self.sexual_count = 0      # Number of sexual reproductions (lifetime limit: 1, per 011)
         self.parent_ids: List[int] = []  # IDs of parent agents (empty if initial generation)
         self.home_base: Optional[str] = None  # Home base for large Lumis (L0=base_alpha, L1=base_beta)
 

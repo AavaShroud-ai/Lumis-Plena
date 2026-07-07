@@ -303,6 +303,38 @@ class Simulation:
             for record in records:
                 f.write(json.dumps(record, ensure_ascii=False) + '\n')
 
+    def _log_ancestral_memories(self, child: 'Agent', origin: str) -> None:
+        """Log what a newborn actually inherited as ancestral ("seven-generations")
+        memory, at the moment of birth.
+
+        v12 handover flagged this as required for run 012: the inheritance
+        mechanism existed, but there was no way to verify from the logs *what*
+        actually crossed over to a child — S47's post-birth introspection was
+        checked by hand in 011 and no clear match to an ancestor's words was
+        found, but that proved only that verification was missing, not that
+        nothing transferred. This records the summary at birth so the question
+        can be answered directly next run.
+
+        Summary granularity: count, plus each entry's generations_back and the
+        first 80 chars of its text — deliberately matched to the peak/last
+        divergence log's 80-char window so the two can be cross-referenced.
+        """
+        mems = getattr(child, 'ancestral_memories', None) or []
+        if not mems:
+            logger.info(
+                f"Step {self.step}: [ANCESTRAL] {child.display_name} ({origin}) "
+                f"inherited 0 ancestral memories."
+            )
+            return
+        logger.info(
+            f"Step {self.step}: [ANCESTRAL] {child.display_name} ({origin}) "
+            f"inherited {len(mems)} ancestral memories:"
+        )
+        for entry in mems:
+            gen = entry.get("generations_back", "?")
+            text = (entry.get("text", "") or "")[:80]
+            logger.info(f"    - gen-{gen} back: \"{text}\"")
+
     def _generate_random_position(self) -> Tuple[int, int]:
         """Generate a random position within the space (origin-centered, central bias)"""
         # Constrain initial positions to 60% of half_space_size to keep agents near center
@@ -949,9 +981,16 @@ class Simulation:
                 continue  # シェルター中は何もできない
             if getattr(agent, 'reproducing', False):
                 # 大型の子育て期間中：基地内移動のみ許可、外出不可
+                # Large-only branch (see in_rearing check below). Prep durations
+                # come from rules.py, the single source of truth shared with
+                # agent.py — previously hardcoded to 30/60 here, which silently
+                # desynced from rules.py after 011 unified large prep to 45/45
+                # (CLONE_PREP_LARGE == SEXUAL_PREP_LARGE == 45). NOTE: the local
+                # `rules` dict (REPRODUCTION_RULES[...]) isn't in scope this early
+                # in step_simulation, so we use the module-level constants.
                 rearing_start = agent.reproduction_start_step + (
-                    30 if agent.reproduction_type == "clone"
-                    else 60  # SEXUAL_PREP_LARGE
+                    CLONE_PREP_LARGE if agent.reproduction_type == "clone"
+                    else SEXUAL_PREP_LARGE
                 )
                 in_rearing = (agent.lumis_type == "large" and self.step >= rearing_start)
                 if in_rearing:
@@ -1296,6 +1335,7 @@ class Simulation:
                 )
                 agent._recent_birth_note = f"Your clone, {child.display_name}, was just born. This is your child."
                 agent._birth_note_pending = agent._recent_birth_note
+                self._log_ancestral_memories(child, origin="clone")
 
             elif agent.reproduction_type == "sexual":
                 # パートナーを探す
@@ -1343,21 +1383,29 @@ class Simulation:
 
                     agent.energy -= 0.15
                     partner.energy -= 0.15
-                    agent.rearing_until_step = self.step + 30
-                    partner.rearing_until_step = self.step + 30
+                    # rearing_steps comes from rules (30 small / 45 large), matching
+                    # the clone branch above. Previously hardcoded to 30 for both
+                    # parents, which under-counted large×large rearing by 15 steps.
+                    agent.rearing_until_step = self.step + rules["rearing_steps"]
+                    partner.rearing_until_step = self.step + rules["rearing_steps"]
                     # 家族ができた喜び（人間でいう「家族ができた」体感）
                     agent.valence = min(1.0, agent.valence + 0.15)
                     partner.valence = min(1.0, partner.valence + 0.15)
                     logger.info(
-                        f"Step {self.step}: [SEXUAL] Lumis {children[0].id} and Lumis {children[1].id} born from "
-                        f"{lumis_name(agent.id)} × {lumis_name(partner.id)}. "
+                        f"Step {self.step}: [SEXUAL] {children[0].display_name} and {children[1].display_name} born from "
+                        f"{agent.display_name} × {partner.display_name}. "
                         f"memory={len(children[0].memory)}/{len(children[1].memory)} entries (shuffled & split)."
                     )
-                    child_ids = f"Lumis {children[0].id} and Lumis {children[1].id}"
-                    agent._recent_birth_note = f"Your children {child_ids} were just born. {lumis_name(partner.id)} is their other parent."
-                    partner._recent_birth_note = f"Your children {child_ids} were just born. {lumis_name(agent.id)} is their other parent."
+                    child_ids = f"{children[0].display_name} and {children[1].display_name}"
+                    agent._recent_birth_note = f"Your children {child_ids} were just born. {partner.display_name} is their other parent."
+                    partner._recent_birth_note = f"Your children {child_ids} were just born. {agent.display_name} is their other parent."
                     agent._birth_note_pending = agent._recent_birth_note
                     partner._birth_note_pending = partner._recent_birth_note
+                    # Log what each child actually inherited. Sexual pairing splits
+                    # the ancestral pool between the two children, so they receive
+                    # different subsets — log both.
+                    self._log_ancestral_memories(children[0], origin="sexual")
+                    self._log_ancestral_memories(children[1], origin="sexual")
                     # パートナーの準備フラグも解除
                     partner.reproducing = False
                     partner.last_reproduction_type = partner.reproduction_type  # save before reset (for rearing-period display color)
