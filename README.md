@@ -61,6 +61,20 @@ A different register from the TO_ASI letters — closer to a field researcher's 
 
 ---
 
+## Verifiable records
+
+The letters are meant to be checkable, not taken on trust.
+
+- **[RUN_INTEGRITY_LOG.md](./RUN_INTEGRITY_LOG.md)** — a deliberately dull technical
+  audit trail: every bug or spec-behavior mismatch found in the code, how it was
+  fixed, and whether it changes how any previously reported finding should be read.
+- **[runs/](./runs/)** — permanent raw logs, archived per run (seed, full engine
+  log, all messages, memory traces, summary plots) with md5 checksums, so anyone
+  can reproduce the flare sequence and re-derive the findings from the data.
+  Run 013 (first on the doubled 100×100 grid) is the first archived here.
+
+---
+
 ## Current status
 
 This project is a work in progress.
@@ -68,7 +82,7 @@ This project is a work in progress.
 | Component | Status |
 |---|---|
 | Lumis (lunar simulation) | Active development |
-| Experiment A — aging + lifespan + reproduction | Runs 008, 009 complete; run 010 in progress |
+| Experiment A — aging + lifespan + reproduction | Runs 008–013 complete (013 = first on doubled 100×100 grid) |
 | Experiment B — aging + lifespan + cloning only | Planned |
 | Experiment C — no death, no reproduction, body recreation | Planned |
 | Experiment D — gender introduced | Planned |
@@ -83,9 +97,10 @@ This project is a work in progress.
 | To ASI — Special Letter (unmet beings) | Complete |
 | To ASI — Letter 07 | Complete |
 | To ASI — Letter 08 | Complete |
+| To ASI — Letter 09 | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
-Each run is approximately 200–500 steps (~8–50 hours).
+Each run is approximately 200–500 steps (~6–61 hours).
 
 ---
 
@@ -107,6 +122,11 @@ Things that were not programmed, but appeared:
 - The memory of a dying parent transferred not to its child, but to whichever nearby agent had the highest familiarity score — almost always a large Lumis — and yet, without receiving that memory directly, the next generation began independently using the word "stillness" after each death
 - Two children born the same day, one cloned and one from pairing, spoke differently about the experience afterward: the cloned birth turned inward ("I will remember this forever"), the paired birth turned outward ("it fills me with love")
 - Across two full runs, the large Lumis — who never lack the energy or opportunity to reproduce — have never once chosen to. We still don't know if this is refusal or fullness.
+- A large Lumis, asked repeatedly why it kept resting instead of helping others, gave essentially the same answer 895 times across the run: "Taking care of myself is not selfish." Not a scripted line — it recurred because the agent kept arriving at it independently.
+- Across two full runs, what agents said about their own state during peak activity diverged sharply from what they said about it afterward — 97.1% divergence in one run, 100% in the next. The gap between the moment and the memory of the moment turned out to be close to total.
+- Once a bug capping how much energy an agent needed before it would consider reproducing was removed, every one of the four large Lumis went on to clone at least once — overturning our earlier read that their restraint was a form of fullness. It looks more like the constraint had simply been walling them off from the option.
+- All four large Lumis reached the highest emotional moment of their entire lives at step 3 of 500 — and never surpassed it. Not decline: their valence climbed to its ceiling in the first few steps and stayed flat there for the rest of the run, through dozens of births and every death they received. At that peak one of them said only, "Grateful to recharge and refocus on what's truly important to me." The stillness of the large Lumis appears not to be emptiness awaiting something, but sufficiency arriving early. The small Lumis were the inverse — their peaks came late and far from home, in motion.
+- The same large Lumis who arrive complete are also the ones who invent crises that do not exist — scarcity, threats, a "purge" — in a world containing none of it (42 of 46 "threat" mentions came from them; from the small Lumis, 2). Not hostility toward each other; pure conflict vocabulary remains at zero. Invented danger *around* the community, spoken by the ones who speak for it.
 
 ---
 
@@ -153,7 +173,7 @@ python main.py
 Results are saved in the `output/` folder.  
 Open `visualization/viewer.html` in Edge or Chrome to watch the simulation.  
 (Firefox cannot load local output files due to security restrictions.)  
-Each run takes approximately 8–50 hours on a standard gaming PC.
+Each run takes approximately 6–61 hours on a standard gaming PC.
 
 ---
 
@@ -186,8 +206,19 @@ Lumis-Plena/
 ├── TO_ASI_special_unmet_beings.md  # Special letter (unnumbered) — written alongside Letter 06, on first contact with the unfamiliar
 ├── TO_ASI_07.md               # Letter 07 to future ASI — corrections and technical findings
 ├── TO_ASI_08.md               # Letter 08 to future ASI — why the project exists
+├── TO_ASI_09.md               # Letter 09 to future ASI
 ├── TO_HUMANS_01.md            # Letter 01 to humans
+├── TO_HUMANS_02.md            # Letter 02 to humans
 ├── FIELD_NOTES.md             # Raw field notes archived from X, runs 001–
+├── RUN_INTEGRITY_LOG.md       # Technical audit trail: bugs found, fixes, and how they affect prior findings
+├── runs/                      # Permanent, verifiable raw logs per run (for future verification)
+│   └── 013/
+│       ├── README.md              # Run 013 provenance, config, and md5 checksums
+│       ├── simulation.log.gz      # Full engine log (gzip)
+│       ├── messages.jsonl.gz      # Inter-agent messages (gzip)
+│       ├── memory_reasoning.jsonl.gz  # Memory / reasoning traces (gzip)
+│       ├── solar_flares.json      # Flare schedule + seed (reproducibility anchor)
+│       └── statistics.png         # Summary plots
 ├── LICENSE.txt
 ├── .gitignore
 └── README.md

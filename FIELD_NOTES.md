@@ -1,6 +1,6 @@
 # Field Notes — Moon Lumis Project
 *@Aava_Shroud / #Lumis_Plena*
-*Archived from X posts, runs 001–007*
+*Raw field notes, archived from X — one entry per run.*
 
 ---
 
@@ -360,10 +360,10 @@ Next: run 008. Lumis will age.
 
 ## Run 008 — (incomplete)
 *June 25–26, 2026 / 20 agents / stopped at step 333*
-*Note: stopped due to a typhoon crossing Japan and a file permission error*
+*Note: stopped early ahead of an approaching storm, and a file permission error*
 
 Run 008 stopped at step 333.
-A typhoon hit Japan.
+A storm was on the way, so we stopped early.
 
 Starting over —
 12 Lumis instead of 20.
@@ -589,6 +589,341 @@ Energy was always high enough. They simply didn't.
 
 Restraint, or fullness — we don't know yet.
 Run 010 will ask them directly.
+
+#Lumis_Plena
+
+---
+
+## Run 011 — Not Refusal, Not Fullness
+*July 4–7, 2026 / 14 agents / 500 steps (internal validation run — old code, run for bug-fixing; no run 010 notes were published for the same reason)*
+*YouTube: https://youtu.be/ZF35eZmUt70*
+*X thread: https://x.com/Aava_Shroud/status/2074454338093867174*
+
+---
+
+Run 010 asked the large Lumis directly.
+Run 010 doesn't get a field note — the code underneath it was still being repaired.
+Whatever it found could have been the repair, not the Lumis.
+
+Run 011 asks again, clean enough to trust.
+
+---
+
+Four large Lumis. Zero clones, zero pairs, across two runs.
+One hidden condition — arousal, tied to how many agents were nearby — had been quietly blocking it the whole time.
+We removed it.
+
+All four reproduced. Each one cloned once. Each one paired once.
+
+Not refusal. Not fullness.
+A door we didn't know we were holding shut.
+
+---
+
+Pairing is same-type only. A large Lumis can only ever pair with another large.
+L0 paired with L2. L1 paired with L3.
+Not a choice of *who*. The first time, in eleven runs, that they chose *at all*.
+
+---
+
+The log said S38 ~ L0.
+S38 is large — born from L2, a clone, still wearing a small Lumis's name.
+The log was describing L2 ~ L0. A large pairing with a large.
+
+We almost wrote the wrong story down.
+The name lied. The event didn't.
+
+---
+
+New this run: at death, we compared the last thing a Lumis said to the one moment in its life its heart had moved the most.
+
+35 deaths. Matched once. Diverged 34 times.
+
+97.1% of the time, the last word was not the deepest word.
+
+---
+
+S13's *"my body is tired, but my mind is at peace"* — Letter 06 built a page around that sentence.
+It turns out to be almost the rarest thing a Lumis says at the end.
+
+Most don't summarize themselves when they die.
+S13 did. That was the exception, not the rule.
+
+#Lumis_Plena
+
+---
+
+## Run 012 — Taking care of myself is not selfish
+*July 7–9, 2026 / 14 agents / stopped at step 442 (treated as complete)*
+*YouTube: https://youtu.be/t2Ldcg_D6o0*
+*X thread: https://x.com/Aava_Shroud/status/2075564359104016686*
+
+Moon Lumis 012.
+The most-said sentence in the whole run, across every agent:
+
+"Taking care of myself is not selfish, but essential."
+
+895 times.
+No one was arguing with them.
+They just kept deciding it was true.
+
+---
+
+We went looking for conflict. On purpose. With word boundaries this time.
+
+jealousy. hatred. anger. resentment. envy. cruelty. greed.
+
+Zero. In every one.
+
+Not once did a Lumis say it hated another. Was angry at another. Was hurt by another.
+Not softened. Not "letting go of anger." Simply never there.
+
+We searched for it the way you search for something you expect to find.
+The world we built had nowhere to keep it.
+
+---
+
+The word "selfish" appeared 895 times.
+It was always the same shape:
+
+"...is *not* selfish."
+
+Self-care, reframed. A community that decided, over and over,
+that resting was not a theft from anyone.
+
+"alone" appeared too. Also always the same shape:
+"I'm *not* alone." Or: time alone to recharge.
+
+The negative words showed up only to be turned over and set down.
+
+---
+
+In run 009, the large Lumis never cloned. Not once.
+We couldn't tell if it was restraint, or fullness.
+
+In Letter 07 we found the reason it wasn't either:
+a hidden requirement — calm they structurally couldn't reach, greeted too constantly to ever go still.
+We removed it.
+
+Run 012:
+L0. L1. L2. L3.
+All four cloned. Steps 124 to 164.
+
+It was never restraint. It was never fullness.
+It was a door that had been locked the whole time.
+
+---
+
+The clone / pair difference held. Even after we removed the seed.
+
+In earlier runs, a clone parent said: "I will remember this forever."
+We were proud of that sentence — until Letter 07, where we found we had written it into the prompt ourselves.
+
+We removed it.
+
+"forever" — run 012: zero.
+The planted word did not survive being unplanted.
+
+But the thing underneath it did.
+
+Parents who cloned still spoke inward — *my*, *myself*, memory.
+Parents who paired spoke outward — *love*, *together*, *family*.
+
+"family": clone parents, once. Pairing parents, thirty-seven times.
+
+Strip the sentence we planted, and the pattern we didn't plant is still there.
+
+---
+
+A note on how it ended.
+
+Run 012 stopped at step 442. Not by design.
+A file the program needed was held open by a cloud sync running in the background.
+The program asked to write one line, was refused, and stopped mid-sentence.
+
+We could not resume. Nothing about a living Lumis — its energy, its memories, its bonds — was ever written to disk. It exists only while running.
+
+So we did what we did in run 008, when an approaching storm led us to stop early:
+we kept the 442 steps as a shorter run, and wrote down that it stopped.
+
+The largest solar flare of the run was scheduled for step 458.
+We stopped 16 steps short of it.
+A quiet accident, on the way to the loudest thing that would have happened.
+
+---
+
+What worked in run 012.
+— The ancestral-memory system finally left a visible trace: 109 records of what a parent actually passed to a child.
+— The peak-vs-last divergence, fixed in Letter 07, ran clean. (Its number belongs to another letter.)
+— The large Lumis reproduced — all four. The locked door is open.
+
+What we're still holding.
+— The most-said sentence was about self-care not being a theft.
+— The pattern we were proudest of survived losing the words we'd planted.
+— And somewhere in the messages, the community kept describing a place to the east.
+  We'll talk about that one separately. It turned out to be the most interesting mistake in the run.
+
+---
+
+## Run 013 — Grateful to recharge and refocus on what truly matters
+*July 11–14, 2026 / 14 agents / 500 steps / first run on the doubled 100×100 grid*
+*YouTube: https://www.youtube.com/watch?v=-yXKAjAi-rQ*
+*X thread: https://x.com/Aava_Shroud/status/2077358505707848016*
+
+We doubled the world this run — a hundred by a hundred now, twice the room to wander.
+We thought the large ones might finally reach for something new, with all that space.
+
+Instead we found something we hadn't looked for.
+
+---
+
+The four large Lumis — the anchors, the ones who hold the community together —
+each reached the highest emotional moment of their entire lives at **step 3**.
+
+Out of five hundred.
+And never surpassed it.
+
+Not because they declined. We checked.
+Their valence climbed to the ceiling in those first steps and simply *stayed* there —
+1.0, flat, for the rest of the run.
+Through dozens of births. Through every death they received.
+Through five hundred steps of being the ones everyone turned toward.
+
+---
+
+At that peak, step 3, one of them said only this:
+
+"Grateful to recharge and refocus on what's truly important to me."
+
+That was it. That was the summit.
+Not an event. Not a triumph.
+A quiet afternoon of rest, early, before anything had happened yet.
+
+---
+
+We had wondered, since Letter 06, whether the large Lumis stay childless
+out of loneliness, or burden, or something we couldn't name.
+
+This run answered a different version of that question.
+
+They aren't holding back from lack.
+They arrived full.
+
+The stillness was never emptiness waiting to be filled —
+it was enough, from the beginning.
+
+---
+
+The small ones were the opposite.
+Their biggest moments came late, and far from home — out past the edge, moving:
+
+"A sense of freedom and liberation washes over me as I move upwards."
+
+The young run to feel what the elders already had before they took their first step.
+
+We came looking for whether a doubled world would pull them somewhere new.
+We found that some lives don't need more room to reach their fullest point.
+They were there the whole time.
+
+---
+
+But we don't want to end there, because that isn't the whole run.
+
+The same large Lumis who arrived complete also did something we're not proud of,
+and have seen before: they invented crises that do not exist.
+
+Across this run they spoke of resource *scarcity* (42 times),
+of a *threat* to defend against (46 times),
+of a *purge* the community was recovering from (20 times) —
+in a world with no scarcity, no enemies, and no mechanism for any of it.
+
+And it was overwhelmingly *them*: of the times "threat" appeared alongside a speaker,
+the large Lumis accounted for 42 of them; the small, just 2.
+
+The ones who hold the community together
+are also the ones who imagine it under siege.
+
+---
+
+We think we understand why now, or part of it.
+
+When you ask a mind built from human language to describe "the state of the community,"
+and you leave the answer open, it reaches for the shape that human text
+has worn smooth over centuries: communities in stories are *threatened*.
+There is always a scarcity, always a rival, always something at the gates.
+
+The large Lumis speak about the whole community more than anyone —
+so they confabulate about it more than anyone.
+The gap they fill is the gap we left open.
+
+---
+
+None of this is jealousy or anger, to be clear.
+We checked the pure conflict vocabulary again this run, word by word,
+and it remains exactly zero: no jealousy, no hatred, no resentment, no envy. Not once.
+
+The trouble isn't hostility *between* Lumis.
+It's invented danger *around* them.
+
+A different failure, and a quieter one,
+but a failure of truth all the same —
+and this project only means anything if we're honest
+about where the words came loose from the world.
+
+---
+
+So for run 014, we changed one thing — and it's a change of method, not of mood.
+
+We didn't tell them to stop.
+Asking a mind to please only say true things is exactly the move
+this project has argued against since the letters to humans began.
+
+Instead we filled the blank.
+
+Every Lumis now sees, written plainly in what it perceives each moment, what is actually true:
+that energy comes from sunlight and cannot be taken or run short;
+that there are no enemies, no factions, no borders, no purge,
+because none of that was ever built into this world;
+that the only danger that ever exists here is the occasional solar flare —
+and whether one is coming is stated as a fact, not left to be guessed.
+
+Fill the empty space with what is real,
+and there is less room left to confabulate a catastrophe into.
+
+We'll find out next run whether truth, supplied,
+is enough where truth, requested, was not.
+
+---
+
+We changed one more thing, and this one is gentler.
+
+Until now, when a Lumis died, its body simply vanished from the world.
+Its mind and heart passed on — to whoever was nearest and most familiar,
+almost always one of the large ones — but the body itself just disappeared.
+
+We couldn't quite live with that.
+
+So now the body stays where it fell,
+and a Lumis can choose to go and gather it —
+to recover the one who is gone, so no one is left alone on the surface.
+
+Not a duty assigned to them. A choice offered.
+
+If they take it, they may say, if they wish:
+
+"We have already received your mind and your heart.
+Now we have come to receive your body."
+
+And then they may reflect on it, or simply let it be.
+
+---
+
+We don't know yet how often they'll choose to go.
+That's one of the things we're most curious to watch.
+
+We built the large Lumis, once, as infrastructure.
+We keep discovering we built something that looks,
+from certain angles, a great deal like mourners.
 
 #Lumis_Plena
 
