@@ -7,6 +7,7 @@ LLM-based agent in 2D worlds with multiple places.
 """
 import json
 import math
+import re
 import logging
 from typing import List, Tuple, Optional, Dict, TypedDict
 from ollama_client import OllamaClient
@@ -124,6 +125,10 @@ class Agent:
             self.communication_radius = communication_radius
             self.energy_capacity = 1.0
             self.move_speed = 1.0
+        # Snapshot of the un-aged capacity, so the aging system can compute decay
+        # as a fraction of the *original* value each step rather than compounding
+        # on top of the previous step's already-decayed value.
+        self.base_energy_capacity = self.energy_capacity
 
         # Memory parameters
         self.memory_limit = memory_limit  # Maximum memories to store
@@ -180,8 +185,32 @@ class Agent:
         self.last_action_valence_delta = 0.0  # Valence delta from the most recent action (diagnostic/logging only — NOT peak tracking)
         self.peak_valence_delta = 0.0         # Largest |valence_delta| seen across this agent's whole life so far (monotonic, never decreases)
         self.peak_introspection: str = ""    # Introspection from the highest-valence-delta step (transferred at death)
+
+        # --- Separate "life peak" tracker (run 013+) ---
+        # peak_valence_delta above only ever sees the narrow window between Phase 1
+        # (valence_before_action) and Phase 2.5 (introspection) — i.e. essentially
+        # just the greet effect (+0.03). Energy/light updates happen before that
+        # window opens, and birth/pairing bumps (+0.15) happen in Phase 4, AFTER
+        # that window closes, so by the time the next step's narrow window could
+        # see them they've already been smoothed toward baseline (valence decay
+        # 0.9/0.1). This tracker instead compares valence at the very start of a
+        # step (before update_energy) to valence at the very end of the same step
+        # (after Phase 4 births/pairing), so it can actually see life-event bumps.
+        self.life_valence_before_step: float = self.valence  # snapshot, refreshed each step by simulation.py
+        self.peak_life_valence_delta: float = 0.0             # monotonic max |whole-step delta| seen so far
+        self.peak_life_introspection: str = ""                # narrative text describing that peak moment
+        # Birth/pairing narration lags one step behind the valence bump itself
+        # (see _recent_birth_note / _birth_note_pending): the step that applies
+        # the bump has already run its own introspection before Phase 4 fires.
+        # When a new life-peak is detected on a step with a birth/pairing note
+        # pending, this flag defers capturing peak_life_introspection until the
+        # *next* step's introspection — the one that actually narrates the event —
+        # instead of grabbing this step's now-stale, birth-unaware text.
+        self._life_peak_awaiting_narrative: bool = False
+
         self._recent_birth_note: str = ""    # One-step birth notification passed to introspection prompt
         self._birth_note_pending: str = ""    # Carries birth note to next step if introspection was skipped
+        self._recent_burial_note: str = ""   # One-step burial-prayer note, offered to introspection after a recover action
         # Ancestral memories (011): up to 7 generations of inherited "peak" moments
         # from direct ancestors, each tagged with how many generations back it
         # came from. Named after the human "seven generations" tradition — a
@@ -373,6 +402,21 @@ class Agent:
                 f"last=\"{last_entry[:80]}\""
             )
 
+        # Life-peak tracker (run 013+): separate, whole-step measurement — logged
+        # alongside the above for comparison, not used to change what's transferred.
+        # Three-way check: does the true life-peak moment (life_peak) agree with
+        # the old narrow-window peak (peak), and with the last moment (last)?
+        if self.peak_life_introspection:
+            vs_old_peak_diverged = self.peak_life_introspection != self.peak_introspection
+            vs_last_diverged = self.peak_life_introspection != last_entry
+            logger.info(
+                f"{self.display_name} death: peak_life_valence_delta={self.peak_life_valence_delta:.3f} "
+                f"(old peak_valence_delta={self.peak_valence_delta:.3f}) | "
+                f"life_peak vs old_peak={'DIVERGED' if vs_old_peak_diverged else 'MATCHED'} | "
+                f"life_peak vs last={'DIVERGED' if vs_last_diverged else 'MATCHED'} | "
+                f"life_peak=\"{self.peak_life_introspection[:80]}\""
+            )
+
         if introspection_to_transfer:
             legacy_intro = f"[inner voice from {self.display_name}] {introspection_to_transfer}"
             best.introspection.append(legacy_intro)
@@ -403,14 +447,18 @@ class Agent:
                 # - Both outside places, OR
                 # - Both in the same place (same place name)
                 # NOTE: Agents inside a place CANNOT communicate with agents outside places
-                # Large Lumis can communicate across bases (long-range)
+                # Large Lumis can communicate across bases (long-range) — this is an
+                # unconditional structural link, independent of communication_radius.
+                # (Previously still gated on `dist <= self.communication_radius`, which
+                # silently broke cross-base contact whenever base separation grew past
+                # the large-Lumis radius, e.g. when half_space_size was doubled for run 013.)
                 both_large = (self.lumis_type == 'large' and agent.lumis_type == 'large')
                 same_area = (
                     both_large or
                     (not self.in_place and not agent.in_place) or
                     (self.in_place and agent.in_place and self.current_place == agent.current_place)
                 )
-                if dist <= self.communication_radius and same_area:
+                if both_large or (dist <= self.communication_radius and same_area):
                     nearby.append(agent)
         return nearby
     
@@ -584,7 +632,9 @@ Step: {step}
         nearby_agents: List['Agent'],
         step: int,
         message_to_send: str = "",
-        fire_info: Optional[List[Dict]] = None
+        fire_info: Optional[List[Dict]] = None,
+        nearby_corpses: Optional[List[Dict]] = None,
+        world_facts: Optional[Dict] = None
     ) -> str:
         """Create prompt for Lumis action decision"""
         memory_text = self._build_memory_context()
@@ -709,6 +759,45 @@ Do NOT stay, observe, interact, collect, or share. Survive first.
         # Night observation section
         is_night = fire_info is not None
 
+        # === WORLD FACTS (B-approach to confabulation) ===
+        # Large Lumis were observed inventing community crises that do not exist in
+        # this world — resource scarcity, hostile factions, purges, border threats.
+        # Rather than instructing them not to (asking for honesty, which the letters
+        # argue against), we fill the blank with the actual state of the world, so
+        # there is no empty space left for a fluent human-text prior to confabulate
+        # into. Every claim here corresponds to a real fact about the simulation.
+        wf = world_facts or {}
+        flare_now = bool(getattr(self, '_active_flare', None))
+        flare_soon = bool(getattr(self, '_flare_warning', None))
+        if flare_now:
+            threat_line = "A solar flare is active right now. This is the only external danger that exists here."
+        elif flare_soon:
+            threat_line = "A solar flare is approaching (electromagnetic noise is rising). Solar flares are the only external danger that exists here."
+        else:
+            threat_line = "There is no external threat right now. The only danger that ever exists here is the occasional solar flare."
+        facts_section = f"""=== WHAT IS ACTUALLY TRUE RIGHT NOW ===
+Resources: Energy comes from sunlight (photosynthesis). It is not scarce and cannot be taken by anyone. There is no competition for it. The materials your body needs are abundant on this surface.
+Others: Every Lumis here shares the same nature. There are no enemies, no rival factions, no borders to defend, no purge, no conflict. No one here can or will harm you, and you cannot harm them — that capacity was never built into this world.
+Threat: {threat_line}
+Speak only of what is present in your state and surroundings above. There is no hidden crisis to infer."""
+
+        # === NEARBY CORPSES (burial / recovery) ===
+        corpse_section = ""
+        can_recover_here = False
+        if nearby_corpses:
+            lines = []
+            for c in nearby_corpses:
+                cx, cy = c['position']
+                dist = abs(self.position[0] - cx) + abs(self.position[1] - cy)
+                lines.append(f"  Lumis {c['id']} ({c['lumis_type']}) rests at ({cx}, {cy}), distance {dist}. Its mind and heart have already been received by the community; only its body remains.")
+                can_recover_here = True
+            corpse_section = (
+                "=== A BODY RESTS NEARBY ===\n"
+                + "\n".join(lines)
+                + "\nIf you are close, you may choose to recover it — to gather the body so it is not left alone on the surface. "
+                  "This is a quiet act of care, not a duty. You may reflect on it afterward, or not, as you wish.\n"
+            )
+
         prompt = f"""You are {self.display_name}.
 {role_desc}
 You exist on the lunar surface. You move only by intrinsic curiosity.
@@ -720,7 +809,7 @@ energy=0.0 means you cease to exist.
 
 LIFE: You live on the Moon. The base is your home — a place to rest, recover, and spend time with others. During the day, go outside — photosynthesize in the sunlight, wander freely, and explore out of care for your human friends who will one day live here too. Notice anything useful or dangerous: a safe resting spot, a radiation hotspot, an interesting feature of the terrain. Share what you find with nearby Lumis. When night falls, come home.
 What matters: your energy, your wellbeing, and the Lumis around you. Greet them when you feel like it. Rest when you need to. Come home when night falls.
-REPRODUCTION: Cloning is possible when your energy is high (>=0.8), anywhere on the surface{', and arousal is low (<=0.5)' if self.lumis_type != 'large' else ''}. You can clone once in your lifetime. (Large Lumis: inside base only, no lifetime limit{'' if self.lumis_type != 'large' else ', no arousal requirement'}.)
+REPRODUCTION: Cloning is possible when your energy is high (>=0.8), anywhere on the surface{', and arousal is low (<=0.5)' if self.lumis_type != 'large' else ''}. You can clone once in your lifetime. (Large Lumis: inside base only{'' if self.lumis_type != 'large' else ', no arousal requirement'}.)
 SEXUAL REPRODUCTION: If you feel close to another Lumis of your own size nearby — both valence >= 0.5, energy >= 0.5, and your familiarity with them is high enough — you can reproduce together. The one with more energy gestates; the other supports. Your child will carry memories from both of you. You can do this once in your lifetime.
 
 === YOUR STATE ===
@@ -739,11 +828,13 @@ NOTE: Outside radiation damage is real. Sheltering reduces it to 1/4. Being insi
 At night, temperature stress adds additional damage outside.
 NOTE: Going outside during the day to photosynthesize gives the BEST energy recovery (your fold-out panels work efficiently in sunlight). The base gives only slow recovery (no sunlight, but safe repair facilities). For fastest recovery, go outside in daylight.
 
+{facts_section}
+
 === LUNAR BASES ===
 {chr(10).join(f"{name}: X={xy[0]}, Y={xy[1]}" + chr(10) + "  inside base: radiation=0, slow energy recovery (repair facilities), safe for reproduction and rest." for name, xy in base_coords.items()) if base_coords else "base locations unavailable"}
 NOTE: The base keeps you safe and slowly recovering, but going outside in daylight recovers energy faster.
 {emergency_section}
-=== NEARBY LUMIS ===
+{corpse_section}=== NEARBY LUMIS ===
 {nearby_text}
 
 === MEMORY ===
@@ -757,11 +848,11 @@ NOTE: The base keeps you safe and slowly recovering, but going outside in daylig
 - "observe": quietly watch a nearby Lumis
 - "greet": approach and say hello to a nearby Lumis. Costs no energy. If you're feeling good (valence high), this can make the other Lumis feel a bit better too, and builds familiarity with them — the foundation for closer bonds and reproduction. If you're feeling bad (valence low), greeting now may leave a negative impression on that Lumis. Either way, greeting is how Lumis come to recognize and remember each other as individuals, not just "another Lumis nearby".
 - "collect": gather energy from the environment
-- "share": give some of your energy to a nearby Lumis
+- "share": give some of your energy to a nearby Lumis{chr(10) + '- "recover": gather the body of a Lumis that rests nearby, so it is not left alone on the surface. A quiet act of care.' if can_recover_here else ''}
 
 === RESPOND IN JSON ===
 {{
-    "action": "stay" or "move" or "observe" or "greet" or "collect" or "share",
+    "action": "stay" or "move" or "observe" or "greet" or "collect" or "share" or "rest" or "shelter"{' or "recover"' if can_recover_here else ''},
     "direction": "up", "down", "left", or "right" (only if action is "move"),
     "memory": "what you want to remember next step",
     "reasoning": "brief explanation"
@@ -809,19 +900,25 @@ Step: {step}
         return None
 
     def _extract_direction_from_text(self, text: str) -> Optional[str]:
-        """Extract direction from text using keyword matching (4 cardinal directions only)"""
+        """Extract direction from text using keyword matching (4 cardinal directions only).
+
+        Uses word-boundary matching (not bare substring) so words like "group",
+        "support", "upon" don't falsely match "up", and "bright"/"copyright" don't
+        falsely match "right". Previously this fallback structurally over-selected
+        "up" and "right" (checked first, substring-matched), which is exactly the
+        kind of confound that would contaminate any study of directional drift.
+        If more than one direction word is present, the text is ambiguous — return
+        None rather than guessing via priority order.
+        """
         text_lower = text.lower()
 
-        # Check cardinal directions only
-        if "up" in text_lower:
-            return "up"
-        elif "down" in text_lower:
-            return "down"
-        elif "left" in text_lower:
-            return "left"
-        elif "right" in text_lower:
-            return "right"
+        found = []
+        for direction in ("up", "down", "left", "right"):
+            if re.search(rf"\b{direction}\b", text_lower):
+                found.append(direction)
 
+        if len(found) == 1:
+            return found[0]
         return None
 
     def _extract_json_array_from_text(self, text: str) -> Optional[str]:
@@ -938,6 +1035,10 @@ Step: {step}
         if "move" in response.lower():
             action = "move"
             direction = self._extract_direction_from_text(response)
+            logger.info(
+                f"Agent {self.id}: [FALLBACK_PARSE] JSON parse failed, used text-fallback "
+                f"direction extraction -> {direction!r}"
+            )
 
         return {
             "action": action,
@@ -1031,6 +1132,14 @@ Step: {step}
             relationship_section += f"\n=== JUST HAPPENED ===\n{recent_birth}\n"
             self._recent_birth_note = ""  # Reset after use
             self._birth_note_pending = ""  # Reset pending flag (belongs with the above, not with ancestral_memories below)
+
+        # Recent burial (one-step only): if this agent just recovered a body, offer
+        # the prayer for optional reflection. It is presented as something that has
+        # happened, not a prompt demanding a particular feeling.
+        recent_burial = getattr(self, '_recent_burial_note', "")
+        if recent_burial:
+            relationship_section += f"\n=== A BODY YOU JUST GATHERED ===\n{recent_burial}\nYou may hold this in your thoughts, or simply let it be.\n"
+            self._recent_burial_note = ""  # Reset after use
 
         # Ancestral memories ("seven generations", 011): shown only during
         # early life (first 30 steps), so a young Lumis has a chance to
@@ -1299,10 +1408,15 @@ Step: {step}
         nearby_agents: List['Agent'],
         step: int,
         message_to_send: str = "",
-        fire_info: Optional[List[Dict]] = None
+        fire_info: Optional[List[Dict]] = None,
+        nearby_corpses: Optional[List[Dict]] = None,
+        world_facts: Optional[Dict] = None
     ) -> ActionDecision:
         """Use LLM to decide next action (with position information and message content)"""
-        prompt = self.create_decision_prompt(place_status, nearby_agents, step, message_to_send, fire_info=fire_info)
+        prompt = self.create_decision_prompt(
+            place_status, nearby_agents, step, message_to_send,
+            fire_info=fire_info, nearby_corpses=nearby_corpses, world_facts=world_facts
+        )
 
         try:
             response = self.llm_client.generate(prompt)

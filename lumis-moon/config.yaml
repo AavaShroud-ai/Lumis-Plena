@@ -3,7 +3,7 @@
 # Simulation Parameters
 simulation:
   duration: 500  # Number of simulation steps
-  half_space_size: 25  # Half of grid size (agents can move in range -25 to +25)
+  half_space_size: 50  # Half of grid size (agents can move in range -50 to +50) — doubled for run 013 to test whether NE drift is intrinsic or a boundary-clamp artifact
   half_place_size: 5   # Half of place size (place covers -5 to +5)
   
 # Agent Parameters
@@ -25,14 +25,14 @@ agents:
 places:
   - name: "base_alpha"
     type: "lunar_base"
-    center_x: -10
-    center_y: 10
+    center_x: -20
+    center_y: 20
     half_size: 5
     capacity: 20
   - name: "base_beta"
     type: "lunar_base"
-    center_x: 10
-    center_y: -10
+    center_x: 20
+    center_y: -20
     half_size: 5
     capacity: 20
   

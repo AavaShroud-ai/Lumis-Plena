@@ -300,30 +300,43 @@ class Visualizer:
                         SPREAD_RADIUS * math.sin(angle)
                     )
 
-        # Draw familiarity lines between agents
+        # Draw familiarity lines: only each agent's single strongest bond.
+        # Previously every pair scoring >= 0.8 was drawn, which at high
+        # population turned the field into a dense green mesh. Thinning to
+        # one line per agent (its closest living tie) keeps each Lumis's
+        # strongest relationship legible. Pairs are deduplicated, so a mutual
+        # strongest bond (A's best is B and B's best is A) draws once; if B's
+        # best is instead C, then B is touched by two lines (A→B and B→C),
+        # each of which is genuinely some agent's single strongest bond.
         drawn_pairs = set()
         agent_map_all = {a.id: a for a in agents}
         for agent in agents:
-            for other_id, fdata in agent.familiarity.items():
-                pair = tuple(sorted([agent.id, other_id]))
-                if pair in drawn_pairs:
+            # Pick this agent's strongest bond among currently living agents.
+            best_id = None
+            best_score = 0.0
+            for other_id in agent.familiarity:
+                if other_id not in agent_map_all:
                     continue
-                drawn_pairs.add(pair)
                 score = agent.get_familiarity_score(other_id)
-                if score < 0.8:
-                    continue
-                other = agent_map_all.get(other_id)
-                if other is None:
-                    continue
-                ox1, oy1 = draw_offsets.get(agent.id, (0, 0))
-                ox2, oy2 = draw_offsets.get(other.id, (0, 0))
-                self.ax.plot(
-                    [agent.position[0] + ox1, other.position[0] + ox2],
-                    [agent.position[1] + oy1, other.position[1] + oy2],
-                    color='#00ffaa',
-                    alpha=min(0.3, score * 0.35),
-                    linewidth=score * 2
-                )
+                if score > best_score:
+                    best_score = score
+                    best_id = other_id
+            if best_id is None or best_score < 0.8:
+                continue
+            pair = tuple(sorted([agent.id, best_id]))
+            if pair in drawn_pairs:
+                continue
+            drawn_pairs.add(pair)
+            other = agent_map_all[best_id]
+            ox1, oy1 = draw_offsets.get(agent.id, (0, 0))
+            ox2, oy2 = draw_offsets.get(other.id, (0, 0))
+            self.ax.plot(
+                [agent.position[0] + ox1, other.position[0] + ox2],
+                [agent.position[1] + oy1, other.position[1] + oy2],
+                color='#00ffaa',
+                alpha=min(0.3, best_score * 0.35),
+                linewidth=best_score * 2
+            )
 
         # Draw communication links
         if communication_links:
@@ -446,7 +459,9 @@ class Visualizer:
         step: int,
         communication_radius: float = None,
         save_path: str = None,
-        fire_states: Optional[List[Dict]] = None
+        fire_states: Optional[List[Dict]] = None,
+        active_flare: Optional[Dict] = None,
+        corpses: Optional[List[Dict]] = None
     ):
         """Visualize a single simulation step"""
         # For saving frames, create new figure each time and close after saving
@@ -515,6 +530,19 @@ class Visualizer:
 
         # Record current agent positions for next step comparison
         self._prev_agent_positions = {a.id: a.position for a in agents}
+
+        # Draw corpses: black dots at the place of death, persisting until a Lumis
+        # recovers the body. This is the visual counterpart to the burial mechanic —
+        # a body left on the surface stays visible so its recovery (or its waiting)
+        # can be seen.
+        if corpses:
+            cx = [c['position'][0] for c in corpses]
+            cy = [c['position'][1] for c in corpses]
+            self.ax.scatter(
+                cx, cy,
+                marker='o', s=70, color='#000000',
+                edgecolors='#444444', linewidths=1.0, zorder=9
+            )
         
         # Build title with statistics for all places
         alive_count = len(agents)
@@ -557,6 +585,26 @@ class Visualizer:
                     if a.distance_to(fire['position']) <= fire['radius']:
                         agents_in_any_fire.add(a.id)
             title += f" | ☾ LUNAR NIGHT"
+
+        # Solar flare overlay — layered on top of the existing day/night
+        # background WITHOUT replacing it. active_flare comes from
+        # simulation.py (self.active_flare); a flare can strike in daylight or
+        # during lunar night, so this is an additive blue wash, drawn just
+        # under the night overlay (zorder 4 vs 5) so that when both are active
+        # the night dimming still reads on top.
+        if active_flare:
+            flare_overlay = patches.Rectangle(
+                (-self.half_space_size, -self.half_space_size),
+                self.half_space_size * 2,
+                self.half_space_size * 2,
+                linewidth=0,
+                facecolor='#1e90ff',
+                alpha=0.22,
+                zorder=4
+            )
+            self.ax.add_patch(flare_overlay)
+            flare_name = active_flare.get('name', 'flare') if isinstance(active_flare, dict) else 'flare'
+            title += f" | ☀ SOLAR FLARE ({flare_name})"
         self.ax.set_title(title, fontsize=11, fontweight='bold', color='lightgray')
 
         # Legend: Lumis style
@@ -581,6 +629,11 @@ class Visualizer:
             legend_elements.append(
                 Line2D([0], [0], color='#000033', linewidth=8,
                        alpha=0.6, label='Lunar Night')
+            )
+        if active_flare:
+            legend_elements.append(
+                Line2D([0], [0], color='#1e90ff', linewidth=8,
+                       alpha=0.6, label='Solar Flare')
             )
         for handle in self.ax.get_legend_handles_labels()[0]:
             legend_elements.append(handle)

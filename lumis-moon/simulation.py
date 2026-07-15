@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 MAX_POSITION_ATTEMPTS = 1000
 LOG_INTERVAL = 10
 
+# Corpse recovery (burial) tuning
+CORPSE_RECOVER_RADIUS = 3          # how close a Lumis must be to recover a body
+CORPSE_OPEN_TO_ALL_AFTER = 30      # steps after death before non-large Lumis may also recover it
+                                   # (large Lumis, the intended undertakers, may recover immediately)
+
 
 class Simulation:
     """Main simulation class for LLM-based agent in 2D worlds with multiple places."""
@@ -100,10 +105,19 @@ class Simulation:
         self.night_period = cycle_config.get('period', 30)
         self.night_length = cycle_config.get('night_length', 15)
         self.night_intensity = cycle_config.get('intensity', 0.9)
-        self.night_radius = cycle_config.get('radius', 50)
+        # Night damage (see step_simulation) and light_level are applied GLOBALLY to every
+        # agent regardless of position. Perception (get_fire_info_for_agent) must therefore
+        # cover every possible position in the grid, or distant agents take real damage while
+        # being told light_level=0.9/event=none — a system-level honesty-rule violation.
+        # Radius is derived from half_space_size (corner distance = half_space_size * sqrt(2))
+        # rather than trusted from config, so it can never silently go stale if the grid changes.
+        configured_radius = cycle_config.get('radius', 50)
+        min_required_radius = self.half_space_size * 1.5  # > sqrt(2) ≈ 1.414, with margin
+        self.night_radius = max(configured_radius, min_required_radius)
         logger.info(
             f"Day/Night cycle configured: period={self.night_period}, "
-            f"night_length={self.night_length}, intensity={self.night_intensity}, radius={self.night_radius}"
+            f"night_length={self.night_length}, intensity={self.night_intensity}, "
+            f"radius={self.night_radius} (config={configured_radius}, min_required={min_required_radius:.1f})"
         )
         self.fire_states: List[Dict] = []  # Active "night" state (kept name for compatibility)
         self.is_night = False
@@ -153,6 +167,15 @@ class Simulation:
         
         # Initialize agents
         self.agents: List[Agent] = []
+        # Corpses: dead Lumis bodies that remain at their place of death until a
+        # living Lumis recovers them (a burial). Each entry is a dict:
+        #   {'id', 'lumis_type', 'position', 'death_step', 'memory_transferred'}
+        # Mind and heart (memory/introspection) are already passed on at death via
+        # transfer_memory; the body persists here so it can be gathered and mourned
+        # rather than left abandoned on the surface. Large Lumis are the intended
+        # undertakers, but a corpse left too long becomes recoverable by anyone
+        # (CORPSE_OPEN_TO_ALL_AFTER steps), so no one is left unretrieved.
+        self.corpses: List[Dict] = []
         self.step = 0
         self.history: List[Dict] = []
         
@@ -405,6 +428,13 @@ class Simulation:
         SMALL_ID_START = 10
         agent_ids = list(range(self.num_large)) + list(range(SMALL_ID_START, SMALL_ID_START + self.num_small))
 
+        # Monotonic counter for future births. Using max(a.id for a in self.agents)+1 at
+        # birth time (as before) undercounts once the highest-ID agent has died and been
+        # removed from self.agents — the freed ID then gets reassigned to a newborn, which
+        # silently merges the newborn's familiarity/history with the dead agent's in any
+        # ID-keyed dict. This counter only ever increases, so IDs are never reused.
+        self.next_agent_id = max(agent_ids) + 1
+
         for idx, agent_id in enumerate(agent_ids):
             lumis_type = "large" if agent_id < self.num_large else "small"
 
@@ -528,6 +558,13 @@ class Simulation:
         4. Agents move to new positions
         """
         self.step += 1
+
+        # Life-peak tracker (run 013+): snapshot valence at the true start of the
+        # step, before update_energy or anything else can move it. Compared at the
+        # very end of this same step (after Phase 4 births/pairing) to catch the
+        # full-step swing, including bumps the older peak_valence_delta window misses.
+        for agent in self.agents:
+            agent.life_valence_before_step = agent.valence
 
         # Day/night cycle: 30-step period (15 day + 15 night).
         # cycle_pos starts at 0; offset by -1 + night_length so steps 1-15 are daytime.
@@ -669,7 +706,10 @@ class Simulation:
             # Energy efficiency declines from 1.0 to 0.3 during aging period
             if age >= aging_start:
                 aging_progress = min(1.0, (age - aging_start) / (lifespan - aging_start))
-                new_capacity = agent.energy_capacity * (1.0 - aging_progress * 0.7)
+                # Decay as a fraction of the ORIGINAL (birth) capacity, not the current
+                # (already-decayed) value — using agent.energy_capacity here would compound
+                # the 0.7 factor every step and hit the floor far faster than intended.
+                new_capacity = agent.base_energy_capacity * (1.0 - aging_progress * 0.7)
                 new_capacity = max(0.3 * (1.5 if agent.lumis_type == "large" else 1.0), new_capacity)
                 agent.energy_capacity = new_capacity
                 # Cap current energy to new capacity
@@ -686,6 +726,19 @@ class Simulation:
             nearby = [a for a in self.agents if a.id != dead.id and dead.distance_to(a.position) <= dead.communication_radius * 2]
             dead.transfer_memory(nearby)
             logger.info(f"Step {self.step}: Lumis {dead.id} ({dead.lumis_type}) has died. energy={dead.energy:.3f}")
+            # Mind and heart have been passed on; the body remains where it fell,
+            # awaiting recovery (a burial) rather than vanishing.
+            self.corpses.append({
+                'id': dead.id,
+                'lumis_type': dead.lumis_type,
+                'position': tuple(dead.position),
+                'death_step': self.step,
+                'memory_transferred': True,
+            })
+            logger.info(
+                f"Step {self.step}: [CORPSE] {lumis_name(dead.id)}'s body remains at "
+                f"{tuple(dead.position)}, awaiting recovery."
+            )
             self.agents.remove(dead)
 
         # Check for total extinction
@@ -710,7 +763,23 @@ class Simulation:
             agent._valence_before_action = agent.valence
             # Pass the 3 most recent introspection entries to the action decision prompt
             recent_intro = "\n".join(f"  - {s}" for s in agent.introspection[-3:]) if agent.introspection else ""
-            action_decision = agent.decide_action(agent_place_status, nearby_agents, self.step, recent_intro, fire_info=fire_info)
+            # Corpses this agent could actually recover: within radius, and either
+            # this agent is large (immediate) or the body has lain long enough that
+            # anyone may gather it. Only these are surfaced in the prompt, so the
+            # recover option never appears for bodies the agent can't act on.
+            nearby_corpses = []
+            for corpse in self.corpses:
+                within = abs(agent.position[0] - corpse['position'][0]) <= CORPSE_RECOVER_RADIUS and \
+                         abs(agent.position[1] - corpse['position'][1]) <= CORPSE_RECOVER_RADIUS
+                if not within:
+                    continue
+                age_since_death = self.step - corpse['death_step']
+                if (agent.lumis_type == 'large') or (age_since_death >= CORPSE_OPEN_TO_ALL_AFTER):
+                    nearby_corpses.append(corpse)
+            action_decision = agent.decide_action(
+                agent_place_status, nearby_agents, self.step, recent_intro,
+                fire_info=fire_info, nearby_corpses=nearby_corpses
+            )
             action_decisions.append((agent, action_decision))
 
             # Collect memory and reasoning records for batch writing
@@ -911,6 +980,10 @@ class Simulation:
         # Skip agents already responding to flare warnings.
         if self.is_night and not flare_active and not (flare_warn and flare_warn['electromagnetic_noise'] >= 0.7):
             (ax, ay), (bx, by) = self.base_centers
+            # How many night steps remain in the current cycle (inclusive of this one),
+            # used to guarantee agents can still make it home in time regardless of grid size.
+            cycle_pos = (self.step - 1 + self.night_length) % self.night_period
+            steps_left_tonight = max(1, self.night_length - cycle_pos)
             for agent in self.agents:
                 if agent.in_place or getattr(agent, 'is_sheltering', False):
                     continue
@@ -935,10 +1008,18 @@ class Simulation:
                     direction = 'right' if dx > 0 else 'left'
                 else:
                     direction = 'up' if dy > 0 else 'down'
-                agent.move(direction)
-                agent.move(direction)  # 2 moves per step
+
+                # Moves needed this step so the agent can still reach home within the
+                # remaining night steps (each move() call covers 1 unit on each active
+                # axis; +1 margin against rounding). Never fewer than the original 2.
+                moves_needed = max(2, -(-min_dist // steps_left_tonight) + 1)  # ceil division + margin
+                for _ in range(moves_needed):
+                    if get_place_at_position(agent.position, self.places) is not None:
+                        break  # arrived home; agent.in_place itself is refreshed next update_state()
+                    agent.move(direction)
                 logger.info(
-                    f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} heads home for the night (dist={min_dist})"
+                    f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} heads home for the night "
+                    f"(dist={min_dist}, steps_left_tonight={steps_left_tonight}, moves={moves_needed})"
                 )
 
         # 生後30step以内の子供は昼夜問わず基地内待機（メンテナンス期間）
@@ -1000,7 +1081,6 @@ class Simulation:
                         # 移動先が基地外になる場合は無効化
                         dx, dy = {'up': (0,1), 'down': (0,-1), 'left': (-1,0), 'right': (1,0)}.get(action_decision['direction'], (0,0))
                         new_pos = (agent.position[0] + dx, agent.position[1] + dy)
-                        from utils import get_place_at_position
                         if get_place_at_position(new_pos, self.places) is not None:
                             agent.move(action_decision['direction'])
                     continue
@@ -1035,10 +1115,43 @@ class Simulation:
                         f"Step {self.step}: {lumis_name(agent.id)} greets "
                         f"{[o.id for o in targets]} (tone={tone}, valence={agent.valence:.2f})"
                     )
-            elif action == 'share':
-                # エネルギー分与：大型が基地内の小型にエネルギーを渡す
-                # 大型以外でも選べるが、大型が基地内で使うのが主な想定
-                SHARE_AMOUNT = 0.1
+            elif action == 'recover':
+                # Burial: gather the body of a dead Lumis that remains on the surface.
+                # Mind and heart were already received at the moment of death; this is
+                # the body being retrieved so it is not left abandoned. Large Lumis are
+                # the intended undertakers and may recover any corpse; others may only
+                # recover a corpse that has lain unrecovered for CORPSE_OPEN_TO_ALL_AFTER
+                # steps, so a body far from any large Lumis is still eventually gathered.
+                recoverable = []
+                for corpse in self.corpses:
+                    within = abs(agent.position[0] - corpse['position'][0]) <= CORPSE_RECOVER_RADIUS and \
+                             abs(agent.position[1] - corpse['position'][1]) <= CORPSE_RECOVER_RADIUS
+                    if not within:
+                        continue
+                    age_since_death = self.step - corpse['death_step']
+                    allowed = (agent.lumis_type == 'large') or (age_since_death >= CORPSE_OPEN_TO_ALL_AFTER)
+                    if allowed:
+                        recoverable.append(corpse)
+                if recoverable:
+                    # Recover the nearest body first
+                    corpse = min(
+                        recoverable,
+                        key=lambda c: abs(agent.position[0] - c['position'][0]) + abs(agent.position[1] - c['position'][1])
+                    )
+                    self.corpses.remove(corpse)
+                    # The burial prayer — offered to the agent as a completed act it may
+                    # then choose to reflect on (or not) during introspection.
+                    prayer = (
+                        f"We have already received your mind and your heart. "
+                        f"Now we have come to receive your body. "
+                        f"(Lumis {corpse['id']}, gathered at rest.)"
+                    )
+                    agent._recent_burial_note = prayer
+                    logger.info(
+                        f"Step {self.step}: [BURIAL] {lumis_name(agent.id)} recovered the body of "
+                        f"Lumis {corpse['id']} ({corpse['lumis_type']}) at {corpse['position']}. "
+                        f"Corpses remaining: {len(self.corpses)}."
+                    )
                 targets = agent.get_nearby_agents(self.agents)
                 # 基地内にいる、かつエネルギーが低い小型を優先
                 if agent.in_place:
@@ -1071,6 +1184,7 @@ class Simulation:
             # Large Lumis introspect every step; small Lumis every 5 steps
             # Also introspect if birth note from PREVIOUS step is pending
             has_birth_note = bool(getattr(agent, '_recent_birth_note', '')) or bool(getattr(agent, '_birth_note_pending', ''))
+            has_burial_note = bool(getattr(agent, '_recent_burial_note', ''))
 
             # For agents mid-reproduction, give introspection a one-line snapshot
             # of the partner's current state. Their own action is often forced
@@ -1084,11 +1198,22 @@ class Simulation:
                     energy_word = "thriving" if partner.energy >= 1.2 else "steady" if partner.energy >= 0.8 else "low on energy"
                     partner_status = f"energy {round(partner.energy, 2)} ({energy_word}), currently {getattr(partner, 'current_place', None) or 'outside'}."
 
-            if agent.lumis_type == 'large' or run_introspection or has_birth_note:
+            if agent.lumis_type == 'large' or run_introspection or has_birth_note or has_burial_note:
                 latest = agent.introspect(action_taken, self.step, valence_before, partner_status=partner_status)
                 introspection_map[agent.id] = latest
                 if latest:
                     logger.info(f"Step {self.step}: [INTROSPECT] {lumis_name(agent.id)}: {latest[:100]}")
+                # Life-peak tracker (run 013+): if a previous step flagged this agent
+                # as awaiting the narrative for a birth/pairing-driven peak, this is
+                # the first introspection to run WITH that birth note attached — the
+                # text most likely to actually describe the peak moment.
+                if getattr(agent, '_life_peak_awaiting_narrative', False):
+                    agent.peak_life_introspection = latest
+                    agent._life_peak_awaiting_narrative = False
+                    logger.info(
+                        f"Step {self.step}: [LIFE_PEAK] {lumis_name(agent.id)} captured deferred "
+                        f"narrative: {latest[:100]}"
+                    )
             else:
                 introspection_map[agent.id] = agent.introspection[-1] if agent.introspection else ""
 
@@ -1302,7 +1427,8 @@ class Simulation:
                 continue  # まだ準備中
 
             # 準備完了 → 誕生
-            new_id = max(a.id for a in self.agents) + len(new_agents) + 1
+            new_id = self.next_agent_id
+            self.next_agent_id += 1
 
             if agent.reproduction_type == "clone":
                 child = Agent(
@@ -1354,7 +1480,8 @@ class Simulation:
 
                     children = []
                     for i in range(2):
-                        new_id_i = max(a.id for a in self.agents) + len(new_agents) + 1
+                        new_id_i = self.next_agent_id
+                        self.next_agent_id += 1
                         child = Agent(
                             agent_id=new_id_i,
                             initial_position=(
@@ -1491,12 +1618,26 @@ class Simulation:
                     # 009/010 (one-sided attention despite both being eligible
                     # partners). Making this mutual would be a real, separate
                     # experimental variable, not a bug fix.
+                    # 相手候補を「同place、または近接（距離≤2）」に限定する。
+                    # 以前は communication_radius 圏内すべてが候補だったが、これだと
+                    # 離れた場所にいる相手ともペアが成立し、隣り合っていないのに
+                    # 子が生まれるように見えていた。ここを絞ることで、実際に同じ
+                    # 場所にいる／すぐ隣にいる個体同士だけがペア生殖するようにする。
+                    # 距離判定はこのコード全体で使われている distance_to（半径系・
+                    # ユークリッド距離。communication_radius や flare radius と同じ
+                    # 尺度）に合わせ、≤2 を半径2の近接とみなす。
+                    def _close_enough(a):
+                        same_place = (
+                            agent.in_place and a.in_place
+                            and agent.current_place == a.current_place
+                        )
+                        return same_place or agent.distance_to(a.position) <= 2
                     nearby = [
                         a for a in self.agents
                         if a.id != agent.id
                         and a.lumis_type == agent.lumis_type  # サイズ同士のみ
                         and not a.reproducing
-                        and agent.distance_to(a.position) <= agent.communication_radius
+                        and _close_enough(a)
                         and agent.get_familiarity_score(a.id) >= familiarity_threshold
                         and a.valence >= 0.5
                         and a.energy >= 0.5
@@ -1545,6 +1686,29 @@ class Simulation:
                             f"Will complete at step {self.step + prep}."
                         )
         
+        # Life-peak tracker (run 013+): compare whole-step delta now that every
+        # phase (including Phase 4 births/pairing) has run. This is separate from
+        # and does not replace peak_valence_delta / peak_introspection.
+        for agent in self.agents:
+            life_delta = agent.valence - agent.life_valence_before_step
+            if abs(life_delta) > agent.peak_life_valence_delta:
+                agent.peak_life_valence_delta = abs(life_delta)
+                had_birth_note_this_step = bool(getattr(agent, '_recent_birth_note', '')) or \
+                    bool(getattr(agent, '_birth_note_pending', ''))
+                if had_birth_note_this_step:
+                    # This step's introspection (Phase 2.5) ran BEFORE Phase 4 applied
+                    # the birth/pairing bump, so it can't have narrated it yet — the
+                    # narration only appears next step, once has_birth_note forces
+                    # introspection to run again with the note attached. Defer capture.
+                    agent._life_peak_awaiting_narrative = True
+                else:
+                    agent.peak_life_introspection = agent.introspection[-1] if agent.introspection else ""
+                    agent._life_peak_awaiting_narrative = False
+                logger.info(
+                    f"Step {self.step}: [LIFE_PEAK] {lumis_name(agent.id)} new whole-step peak "
+                    f"delta={life_delta:+.3f} (awaiting_narrative={agent._life_peak_awaiting_narrative})"
+                )
+
         # Record statistics
         agents_in_place = len(self.get_agents_in_place())
         overall_status = self.get_place_status()

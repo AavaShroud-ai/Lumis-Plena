@@ -97,7 +97,13 @@ def handle_visualization(
         return
     
     place_status = sim.get_place_status()
-    
+
+    # Currently active solar flare (None if none). Set each step in
+    # simulation.step_simulation(); passed through so the visualizer can draw
+    # the blue flare overlay on top of the day/night background.
+    active_flare = getattr(sim, 'active_flare', None)
+    corpses = getattr(sim, 'corpses', None)
+
     if should_save:
         save_path = os.path.join(output_dir, f"frame_{step:04d}.png")
         visualizer.visualize_step(
@@ -106,7 +112,9 @@ def handle_visualization(
             step,
             communication_radius=sim.communication_radius,
             save_path=save_path,
-            fire_states=sim.fire_states
+            fire_states=sim.fire_states,
+            active_flare=active_flare,
+            corpses=corpses
         )
         logger.info(f"Saved frame: {save_path}")
     else:
@@ -118,7 +126,9 @@ def handle_visualization(
                 place_status,
                 step,
                 communication_radius=sim.communication_radius,
-                fire_states=sim.fire_states
+                fire_states=sim.fire_states,
+                active_flare=active_flare,
+                corpses=corpses
             )
             time.sleep(VISUALIZATION_UPDATE_DELAY)
         except Exception as e:
