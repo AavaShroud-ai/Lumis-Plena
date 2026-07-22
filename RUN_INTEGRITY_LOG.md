@@ -93,4 +93,56 @@ Recorded here as verification facts; interpretation belongs in the letters.
 
 ---
 
+## Run 014 — facts-injection + corpse/burial, and a silently dead `share`
+
+**Purpose of the run:** first run of the confabulation countermeasure described in Letter 10 — instead of *asking* agents to speak only of what is real (the run-012 approach, which caught only the "legible" lies), the true state of the world is written directly into each agent's perceived context every step (energy comes from sunlight and cannot run short; no enemies/factions/borders/purge; the only real hazard is a solar flare, stated as fact). Also the first run of the corpse/burial mechanic: a dead Lumis leaves a body on the surface, and a nearby living Lumis may choose a new `recover` action to gather it.
+
+Config: seed `109116566729441005151201845213840744196`, 6 flares, 14 agents (4 large / 10 small), grid 50, 500 steps, completed.
+
+### Bug found *after* the run — `share` was a dead action
+
+- **Found by:** post-run log analysis (severity: silently voids one action for the whole run + latent crash). In `simulation.py`'s Phase-2 action dispatch, there was no `elif action == 'share':` branch. The energy-sharing logic had come to sit *inside* the tail of the `recover` branch, and referenced a constant `SHARE_AMOUNT` that was **never defined anywhere** in the codebase.
+- **Two consequences, both confirmed in the 014 log:**
+  1. **`share` never executed.** Across the entire run, the number of actual energy-sharing transfers was **0**. When an agent chose `share`, dispatch fell through and nothing happened — no transfer, no log line, no effect.
+  2. **`recover` was crash-prone.** Because the share code lived inside the `recover` branch, any `recover` chosen while a low-energy neighbor was in range would have hit `NameError: SHARE_AMOUNT`. The run completed only because that specific coincidence did not occur; `py_compile` passes cleanly, since this is a runtime NameError, not a syntax error — which is why it survived earlier checks.
+- **Fix (applied for run 014-2):** define `SHARE_AMOUNT = 0.15` at module level (matched to the 0.15 reproduction-cost scale; a giver must hold ≥ `SHARE_AMOUNT + 0.3` to give, so sharing can never push the giver into scarcity), and restore `share` as its own independent `elif` branch. The dispatch chain now reads `rest / move / greet / recover / share`, all at the same level. Verified by isolated execution of the transfer math (giver 1.40→1.25, recipient 0.40→0.55, no NameError) before 014-2.
+
+### Impact on 014's corpse finding — why this matters for the letter
+
+- **In 014, `recover` was chosen 0 times; all 39 bodies remained unburied.** On its own this looks like a clean behavioral result ("the large Lumis declined to bury"). It is **not** clean, and must not be reported as clean. While standing within recovery range of a corpse, the single most common action the large Lumis chose was `share` (125 of the near-corpse action choices) — and `share` was the dead action. So the large Lumis were, in effect, offered a broken gesture of care, and the 0-recovery figure was measured under that defect. **Any statement about whether large Lumis "choose" to bury must cite 014-2, not 014.** 014's 0-recovery is recorded here only as the reason 014-2 was run, not as a finding.
+- Confabulation vocabulary in 014 (agent speech, word-boundary, header stripped): **scarcity 42, threat 34 (all 34 from large-proxy energy>1.05; small 0), purge 9.** Pure conflict vocabulary (jealousy/hatred/anger/resentment/envy/…) remained **0**, consistent with every prior run. These counts are usable (they do not depend on the `share` defect); the corpse-recovery count is the only 014 figure invalidated by the bug.
+
+## Run 014-2 — identical world, working `share`, instrumented perception
+
+**Purpose:** re-run 014 with the *only* deliberate change being the `share` fix, to give the corpse/burial question a fair test — plus one observation-only instrument (below). Seed pinned to 014's seed, so the flare schedule and initial conditions match; verified by regenerating the flare list from the seed (all 6 flares identical in start_step/duration/damage to 014's `solar_flares.json`). 14 agents, grid 50, 500 steps, completed. 38 natural deaths (vs 39 in 014 — the working `share` shifts energy budgets slightly, so death timing/count drift a little; this is expected and means 014-2 is "the same stage, a different hand," not a byte-identical replay — llama3.2 at temperature 0.2 plus Ollama nondeterminism also contribute).
+
+### Instrument added (observation-only, behavior-neutral)
+
+- **`[CORPSE_PROMPT]` log line.** In `agent.py`, when a corpse section is actually assembled into an agent's decision prompt, a single `logger.info` records the step, the agent, and which body/bodies. **This changes nothing** about the prompt text, actions, or valence — verified by diffing against the 014 `agent.py` (the only change is the inserted log block; the prompt string is byte-identical). Its sole purpose: answer "did the large Lumis *see* the body, or was it never surfaced?" directly from the log, instead of reconstructing it from positions after the fact. Added because the 014 corpse result was ambiguous between "declined" and "never offered."
+
+### What 014-2 established
+
+- **`share` now works:** 343 actual energy-transfer events (vs 0 in 014); 152 by large, 191 by small. The fix is confirmed live in the intended run.
+- **Corpse recovery is still 0** — but this time it is a real behavioral fact, not a code defect. Bodies were surfaced into living Lumis' decision prompts **9,857 times** (1,266 of them into large Lumis' prompts). When a large Lumis was shown a corpse and its action that step could be recovered from the reasoning log, it chose `move`/`collect`/`rest`/`greet`/`observe` — **`recover` 0 times.** In the reasoning text at those moments, the body is not mentioned at all: not refused, not grieved, simply absent from what the mind was reasoning about. **This is the clean version of the finding, and the one the letter cites:** the recover option was perceived and not taken, not merely never presented. (Interpretation — perception ≠ attention — belongs in Letter 10, not here.)
+- **Confabulation did not fall; it rose slightly.** Agent speech, same method as 014: **scarcity 63, threat 63 (59 large-proxy), purge 17.** With `share` working, community activity increased, agents spoke about the community more, and per-blank confabulation rose in proportion. Facts-injection thinned the most legible catastrophes but did not close the *neutral* case — consistent with the letter's asymmetry thesis. Large-Lumis dominance of `threat` persists (59/63). Pure conflict vocabulary again **0**.
+- **`purge` content, recorded because the shape matters:** of 17 `purge` utterances, **14 are framed as recovery *after* a purge** ("rebuilding after the recent purge," "aftermath," "renewal"), only 3 as active/impending. The word supplies a contentless catastrophe whose only function is to be recovered from — a "communal rebirth" narrative template filling the *community-state* blank, not a reference to any specific human history. Logged here as a raw distribution; interpreted in Letter 10.
+- **NE drift persists** (unchanged confound status from 013): fallback-parse direction distribution still skews hard up/right vs down/left, with left at 0, on the doubled grid and after the word-boundary fix.
+
+### Latent issue noted for run 015 (not yet fixed)
+
+- **The action→result loop is open.** When a Lumis shares energy (or acts at all), the *result* of that act is not fed back into what it perceives on the following step. An agent can give, but cannot then perceive that it gave or what changed. This is the same open loop, in the wiring, that Letter 10 identifies in the agents' cognition (belief formed, never returned to the world for checking). Flagged here as the design target for run 015 (close the loop: perceive → suppose → act → **perceive the result**), so that the fix and its rationale are on the record before it is attempted.
+
+---
+
+## What runs 014 / 014-2 confirmed (integrity-relevant only)
+
+Recorded as verification facts; interpretation belongs in the letters.
+
+- The corpse/burial *perception* path is wired correctly (9,857 prompt surfacings in 014-2) and the *visual* path is wired correctly (recovered bodies are removed from `self.corpses` and so disappear from the next rendered frame). The 0-recovery outcome is a behavioral result, not a broken pipe.
+- `share` is confirmed dead in 014 (0 transfers) and alive in 014-2 (343 transfers) — the one deliberate code change between the two runs, isolated.
+- 014-2 flare schedule is bit-for-bit the 014 schedule (seed-pinned, regenerated and checked), so the two runs are a matched pair differing only in the `share` fix (plus expected LLM/Ollama nondeterminism).
+- Confabulation remains overwhelmingly a large-Lumis behavior and is unaffected in kind by facts-injection; only the most legible catastrophes thinned. Pure conflict vocabulary stayed at 0 across both runs.
+
+---
+
 *Maintained alongside the letters. If a finding in a TO_ASI letter ever conflicts with an entry here, this file is the one that was written to be checked.*

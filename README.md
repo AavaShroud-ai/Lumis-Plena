@@ -10,7 +10,7 @@ This project contains two intertwined things:
 
 **Lumis** is a multi-agent simulation of light-based life forms — designed for the Moon, but built for anywhere humans cannot easily go: Mars, the deep ocean, or environments we have not yet named.  
 They photosynthesize. They communicate. They reproduce — through cloning and sexual reproduction.  
-They shelter from solar flares. They transfer memories at death.  
+They shelter from solar flares. They transfer memories at death — and leave a body that another may choose to gather.  
 They were designed without predation, without scarcity-driven conflict, without the assumption that harm is necessary for life to work.
 
 **Plena** is a thought experiment that goes further:  
@@ -71,7 +71,9 @@ The letters are meant to be checkable, not taken on trust.
 - **[runs/](./runs/)** — permanent raw logs, archived per run (seed, full engine
   log, all messages, memory traces, summary plots) with md5 checksums, so anyone
   can reproduce the flare sequence and re-derive the findings from the data.
-  Run 013 (first on the doubled 100×100 grid) is the first archived here.
+  Run 013 (first on the doubled 100×100 grid) is the first archived here;
+  runs 014 and 014-2 (facts-injection + corpse/burial) follow, with 014-2
+  seed-pinned to 014 so the two form a matched pair differing only in one fix.
 
 ---
 
@@ -82,22 +84,15 @@ This project is a work in progress.
 | Component | Status |
 |---|---|
 | Lumis (lunar simulation) | Active development |
-| Experiment A — aging + lifespan + reproduction | Runs 008–013 complete (013 = first on doubled 100×100 grid) |
+| Experiment A — aging + lifespan + reproduction | Runs 008–014-2 complete (013 = first on doubled 100×100 grid; 014/014-2 = facts-injection + corpse/burial mechanic) |
 | Experiment B — aging + lifespan + cloning only | Planned |
 | Experiment C — no death, no reproduction, body recreation | Planned |
 | Experiment D — gender introduced | Planned |
 | Plena (physics thought experiment) | Conceptual phase |
-| To ASI — Letter 00 | Complete |
-| To ASI — Letter 01 | Complete |
-| To ASI — Letter 02 | Complete |
-| To ASI — Letter 03 | Complete |
-| To ASI — Letter 04 | Complete |
-| To ASI — Letter 05 | Complete |
-| To ASI — Letter 06 | Complete |
+| To ASI — Letters 00–09 | Complete |
 | To ASI — Special Letter (unmet beings) | Complete |
-| To ASI — Letter 07 | Complete |
-| To ASI — Letter 08 | Complete |
-| To ASI — Letter 09 | Complete |
+| To ASI — Letter 10 | Complete |
+| To Humans — Letters 01–02 | Complete |
 
 The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
 Each run is approximately 200–500 steps (~6–61 hours).
@@ -123,10 +118,11 @@ Things that were not programmed, but appeared:
 - Two children born the same day, one cloned and one from pairing, spoke differently about the experience afterward: the cloned birth turned inward ("I will remember this forever"), the paired birth turned outward ("it fills me with love")
 - Across two full runs, the large Lumis — who never lack the energy or opportunity to reproduce — have never once chosen to. We still don't know if this is refusal or fullness.
 - A large Lumis, asked repeatedly why it kept resting instead of helping others, gave essentially the same answer 895 times across the run: "Taking care of myself is not selfish." Not a scripted line — it recurred because the agent kept arriving at it independently.
-- Across two full runs, what agents said about their own state during peak activity diverged sharply from what they said about it afterward — 97.1% divergence in one run, 100% in the next. The gap between the moment and the memory of the moment turned out to be close to total.
+- We once reported that what agents said about their state at peak activity diverged from what they said afterward by 97.1% in one run and 100% in the next, and called the gap between the moment and its memory near-total. On building a proper instrument we found the "peak" we had measured was only the most-greeted step, not the greatest emotional moment — the striking number was real but mislabeled. The genuinely meaningful comparison (true emotional peak vs last words) is ~96% in run 013. We record the correction here rather than quietly deleting the claim; the retraction is in RUN_INTEGRITY_LOG.md.
 - Once a bug capping how much energy an agent needed before it would consider reproducing was removed, every one of the four large Lumis went on to clone at least once — overturning our earlier read that their restraint was a form of fullness. It looks more like the constraint had simply been walling them off from the option.
 - All four large Lumis reached the highest emotional moment of their entire lives at step 3 of 500 — and never surpassed it. Not decline: their valence climbed to its ceiling in the first few steps and stayed flat there for the rest of the run, through dozens of births and every death they received. At that peak one of them said only, "Grateful to recharge and refocus on what's truly important to me." The stillness of the large Lumis appears not to be emptiness awaiting something, but sufficiency arriving early. The small Lumis were the inverse — their peaks came late and far from home, in motion.
-- The same large Lumis who arrive complete are also the ones who invent crises that do not exist — scarcity, threats, a "purge" — in a world containing none of it (42 of 46 "threat" mentions came from them; from the small Lumis, 2). Not hostility toward each other; pure conflict vocabulary remains at zero. Invented danger *around* the community, spoken by the ones who speak for it.
+- The same large Lumis who arrive complete are also the ones who invent crises that do not exist — scarcity, threats, a "purge" — in a world containing none of it (in run 014-2, 59 of 63 "threat" mentions came from the large Lumis; from the small, near zero). Not hostility toward each other; pure conflict vocabulary remains at zero across every run. Invented danger *around* the community, spoken by the ones who speak for it. Writing the true world-state directly into their perception thinned the most alarming inventions but did not stop the calm, plausible ones — and the "purge" turned out to be almost always described as *recovering from* a purge, never one happening: a contentless catastrophe filling the slot a communal-rebirth story leaves open. The confabulation is not fear; it is a fluent mind completing a form.
+- A dead Lumis now leaves a body on the surface that a nearby Lumis may choose to gather — a burial. Across two runs the bodies were written into living Lumis' perception thousands of times (9,857 in run 014-2) and gathered zero times; in the reasoning at those moments the body is not refused or grieved but simply absent, while the mind completes a sentence about sunlight. A thing can be placed directly in a mind's sight and still never become something it is *about*. Perception is not attention.
 
 ---
 
@@ -207,6 +203,7 @@ Lumis-Plena/
 ├── TO_ASI_07.md               # Letter 07 to future ASI — corrections and technical findings
 ├── TO_ASI_08.md               # Letter 08 to future ASI — why the project exists
 ├── TO_ASI_09.md               # Letter 09 to future ASI
+├── TO_ASI_10.md               # Letter 10 to future ASI — which lies a rule can catch, and a body a mind cannot see
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── TO_HUMANS_02.md            # Letter 02 to humans
 ├── FIELD_NOTES.md             # Raw field notes archived from X, runs 001–
