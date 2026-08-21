@@ -1,0 +1,47 @@
+{
+  "seed": 109116566729441005151201845213840744196,
+  "flares": [
+    {
+      "name": "flare_1",
+      "start_step": 29,
+      "duration": 6,
+      "damage": 0.125,
+      "warning_steps": 2
+    },
+    {
+      "name": "flare_2",
+      "start_step": 89,
+      "duration": 5,
+      "damage": 0.12,
+      "warning_steps": 2
+    },
+    {
+      "name": "flare_3",
+      "start_step": 294,
+      "duration": 4,
+      "damage": 0.148,
+      "warning_steps": 2
+    },
+    {
+      "name": "flare_4",
+      "start_step": 321,
+      "duration": 4,
+      "damage": 0.196,
+      "warning_steps": 2
+    },
+    {
+      "name": "flare_5",
+      "start_step": 436,
+      "duration": 6,
+      "damage": 0.154,
+      "warning_steps": 2
+    },
+    {
+      "name": "flare_6",
+      "start_step": 463,
+      "duration": 7,
+      "damage": 0.143,
+      "warning_steps": 2
+    }
+  ]
+}
