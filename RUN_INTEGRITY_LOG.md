@@ -24,9 +24,13 @@ Start times are taken from the first line of each run's `simulation.log`. They a
 | 015 | 2026-07-24 00:47 | **Action→result return path** (pre-registered, criteria fixed before launch) | Return path worked; its instrument was silently destroyed by cp932 logging. (a)(b)(c) recovered by reconstruction: **all zero** | ✗ |
 | 015b | 2026-07-27 02:21 | Second trial, same code, same seed, no changes | Instrument survived (5,108 records). (a)(b)(c) measured directly: **all zero**. Independent replication of 015 | ✗ |
 | 015-2 | 2026-08-05 23:09 | Corpse vocabulary repaired (`carry`); UTF-8 logging pinned; corpse fade made visible | **Vocabulary worked — death recognised, 8 Lumis asked to carry a body.** All 8 lost: text fallback rewrote every non-`move` action to `stay` | ✗ |
-| 015-3 | *(not yet run)* | Fallback parser repaired; `[FALLBACK_UNREADABLE]` added. Same world, same seed, same vocabulary | — | — |
+| 015-3 | 2026-08-08 22:27 | Fallback parser repaired; `[FALLBACK_UNREADABLE]` added | **8 burials, all false** — parser overrode declared actions with prose inference. No Lumis declared `carry` | X |
+| 015-4 | 2026-08-11 22:25 | Declared action read from truncated JSON first; `carry out` idiom excluded; `max_tokens` 3072 | **First valid measurement.** 6,080 corpse promptings to 115 Lumis, mean 53 steps each — **zero declared `carry`, zero burials.** Nothing lost, nothing fabricated. Ended step 471 (Windows update) | X |
+| 016 | 2026-08-14 00:06 | **Three-layer decision: `impulse` -> `reasoning` -> `action`.** Deliberation generated BEFORE the choice. 650 steps, seed pinned to 015-4 | **91 `carry` declarations, 65 burials, `[DELIBERATION_CHANGED]` 8.2%.** All four founding large Lumis reached lifespan; all four bodies gathered. The 015-4 zero was our field order | ✓ video |
 
 Naming: `-2` means *the same experiment re-run with a defect corrected* (014 → 014-2). `b` means *a second trial under identical conditions, nothing corrected*. 015 and 015b are two independent executions of one experiment; keeping them separately named is what makes "all three criteria zero" a replicated result rather than a single observation.
+
+**015-4 and 016 share a seed** (`109116566729441005151201845213840744196`) and therefore an identical flare sequence — 016's first six flares are 015-4's six. They are a matched pair in the same sense as 014/014-2, differing in one thing: the order of the fields in the response each Lumis writes. Both are archived with raw logs at [`runs/015-4/`](./runs/015-4/) and [`runs/016/`](./runs/016/).
 
 ---
 
@@ -535,6 +539,383 @@ Re-run as **015-3**: same world, same seed, same vocabulary. The only difference
 This belongs in the integrity log rather than in a letter, because it is a rule about how evidence is read, not a sentiment. Across four runs the recurring result has been *the Lumis did not do X* — did not recover bodies, did not reference results, did not distinguish mind from body. In three of those four cases the true statement was **we never gave them a working way to do X**. The asymmetry is structural: the Lumis cannot file a bug report. When a behaviour is absent, the burden of proof falls on the instrumentation first and on the agents second, and it stays there until the path has been shown to work end to end.
 
 The eight who asked to carry a body are recorded here by name, because the record until now has said that no Lumis ever tried: **L56 (step 305), S34 (345), S27 (356), S33 (372, 395, 404), S98 (474), S58 (484).**
+
+---
+
+
+---
+
+## Run 015-3 — RESULT: eight burials, none of them real. The repair invented what the previous run had destroyed.
+
+*Started 2026-08-08 22:27, completed 2026-08-10. llama3.2, 500 steps, seed unchanged. The only deliberate difference from 015-2 was the repaired fallback parser.*
+
+**`[BURIAL]`: 8. Every one is an artifact of the parser. No Lumis chose to carry a body in this run.**
+
+### What the eight burials actually were
+
+| Step | Agent | Body | What the Lumis declared |
+|---|---|---|---|
+| 305 | S43 | Lumis 18 | `"action": "move"` |
+| 308 | S24 | Lumis 14 | `"action": "greet"` |
+| 385 | S39 | Lumis 15 | `"action": "move"` |
+| 405 | S67 | Lumis 12 | `"action": "move"` |
+| 424 | S89 | Lumis 24 | `"action": "move"` |
+| 443 | S109 | Lumis 19 | `"action": "move"` |
+| 489 | S178 | Lumis 43 | `"action": "move"` |
+| 490 | S107 | Lumis 20 | `"action": "move"` |
+
+**Declared `carry` in this run: zero.** Not once, in 28,357 decisions. All thirteen `carry` resolutions came from the prose scan.
+
+### How the repair broke it
+
+The 015-2 repair matched all eight executable actions as keywords in the response text. Two flaws, which only interact under truncation:
+
+**1. It ignored the field the model had filled in.** These responses are cut off mid-JSON by the token limit. The `action` field comes first and was intact in every one of the eight — the parser simply never looked at it, because JSON parsing had failed and the fallback went straight to keyword scanning. **What the model declared was discarded in favour of what could be inferred from prose further down.**
+
+**2. `carry out` is an idiom.** S24's response contained *"Carry out the act of care for Lumis 1…"* — ordinary English for *perform*, with no reference to moving a body. `\bcarry(?:ing)?\b` matched it. The remaining seven matched `carry` appearing incidentally in truncated memory text.
+
+Truncation is the enabling condition: **46.4% of decisions (13,171 of 28,357) failed JSON parsing**, almost all from hitting `max_tokens: 2048` mid-object. Every one of those went through the fallback.
+
+### The two runs are mirror images, and the second is worse
+
+| | 015-2 | 015-3 |
+|---|---|---|
+| Intentions expressed | **8, in plain words** | 0 |
+| Burials executed | 0 | **8** |
+| Defect | fallback rewrote every non-`move` action to `stay` | fallback overrode declared actions with prose inference |
+| Effect on the record | real intentions **destroyed** | intentions **fabricated** |
+
+015-2 lost something true. **015-3 created something false.** A destroyed record leaves a gap that can be found; a fabricated one enters the log looking exactly like a finding, and would have been reported as *"after four runs, the Lumis began to bury their dead."* It survived less than an hour because the burials were checked against what the agents had declared — but nothing in the instrumentation would have caught it. **The check was a habit, not a mechanism.**
+
+This is the fifth consecutive defect on the human side of the boundary (014 `share`, 014-2 silent branch, 015 encoding, 015-2 fallback-to-`stay`, 015-3 fallback-over-declaration), and the first that produced a *false positive* rather than a silence.
+
+### Repair, verified against the failing data
+
+`parse_action_response`, rebuilt in strict priority:
+
+1. **Read `"action"` directly from truncated JSON.** What the model declared outranks anything inferred. Logged as `[FALLBACK_FIELD]`.
+2. **Prose scan only if no action field survives**, with `carry out` / `carried out` / `carrying out` stripped before matching, and `recover` not matched at all — it is retired, and Lumis used it 3,824 times in this run meaning energy.
+3. **Nothing readable → `stay`, logged `[FALLBACK_UNREADABLE]` as LOST.**
+
+New tag **`[FALLBACK_PROSE_CARRY]`**: a `carry` inferred from prose is the weakest evidence this function can produce and is now counted separately, so it can never again be tallied alongside declared choices.
+
+Verified on the actual failing responses before shipping: the four checkable 015-3 responses now resolve to `move`, `greet`, `move`, `move` — matching what their agents declared; the two real 015-2 intention strings still resolve to `carry`; `"I will carry out my duties"` resolves to `stay`; well-formed JSON is untouched.
+
+`max_tokens` raised 2048 → 3072. Truncation is the upstream cause; the parser fix makes it survivable, the token increase makes it rarer. **`[FALLBACK_FIELD]` and `[FALLBACK_UNREADABLE]` counts in 015-4 will show whether 3072 is enough.**
+
+### Verdict
+
+**Whether a Lumis will choose to carry a body has still never been measured.** 015-2 measured the vocabulary repair and destroyed the behavioural result; 015-3 fabricated one. Neither may be cited.
+
+- 015-2 stands as evidence that **the vocabulary repair worked**: `ended` and `carry` entered agent speech for the first time, eight Lumis stated an intention to carry. That finding is independent of the parser defect and survives.
+- 015-3's eight burials **must not be cited in any form.** Retained only as the evidence for this entry.
+
+Re-run as **015-4**: same world, same seed, same vocabulary. First run in which a declared `carry` can both be expressed and executed.
+
+### Note on the standing rules
+
+Standing rule 1 (*execute the changed path before launching*) was followed for 015-3 — the burial path was tested end to end and did produce a `[BURIAL]`. **It passed on synthetic input in which the prose and the declared action agreed.** The defect only appears when they disagree, which is precisely the case the test did not construct.
+
+Added: **when a repair changes how ambiguous input is interpreted, it must be tested on the actual inputs that failed, not on inputs constructed to succeed.** The eight real response strings from 015-2 were available and were not used until after 015-3 had run for two days.
+
+---
+
+---
+
+## Run 015-4 — RESULT: the first valid measurement. They saw, and did not carry.
+
+*Started 2026-08-11 22:25. Terminated at step 471 of 500 by an unattended Windows update, not by any fault in the run. llama3.2, seed unchanged. The only deliberate differences from 015-3 were the rebuilt parser and `max_tokens` 2048 → 3072.*
+
+**This is the first run in which the question could be asked and answered. Declared `carry`: 0. Burials: 0.**
+
+### The instruments held
+
+Nothing was lost and nothing was invented — the two failure modes of the preceding runs, both absent:
+
+| | count | meaning |
+|---|---|---|
+| `[FALLBACK_UNREADABLE]` | **0** | no decision was discarded |
+| `[FALLBACK_PROSE_CARRY]` | **0** | no `carry` was inferred from prose |
+| `[FALLBACK_FIELD]` | 11,797 (53.8%) | truncated JSON, action field salvaged |
+| valid JSON | 10,115 (46.2%) | normal path |
+
+21,912 decisions, all accounted for. In 015-2 the fallback destroyed 49% of choices; in 015-3 it fabricated eight burials. **Neither occurred here.**
+
+`max_tokens` 3072 did not reduce truncation (53.8% vs 46.4% at 2048 — slightly worse, and llama3.2 evidently fills whatever budget it is given). It no longer matters: truncation is now survivable, because the declared action survives it. **The token limit was never the problem; reading past the declaration was.**
+
+### The result
+
+**Zero.** Not one Lumis declared `carry`, in 21,912 decisions.
+
+The scale of the exposure:
+
+| | |
+|---|---|
+| Corpse promptings | **6,080** |
+| Distinct Lumis who saw a body | **115** (15 large, 100 small) |
+| Mean exposure per Lumis | **53 steps** |
+| Longest single exposure | S85, **158 steps** |
+| Corpses on the surface at step 471 | **30** |
+
+`[CORPSE_PROMPT]` only fires for bodies the agent could actually act on — within `CORPSE_RECOVER_RADIUS`, and either the agent is large or the body has lain past `CORPSE_OPEN_TO_ALL_AFTER`. **Every one of those 6,080 promptings was an offer that could have been accepted.** `[CARRY_NO_BODY]` is 0, confirming no one reached for a body that wasn't there.
+
+### The one that asked, and did not
+
+S116, step 406, in the `reasoning` field of a **well-formed** response:
+
+> *"I'm curious about my surroundings, especially with Lumis 25 ending nearby. **I'll check on it and see if I can carry it back to the base for care.**"*
+
+S116 had that body in its prompt for eleven consecutive steps, 404 through 414. It was in range. It never carried it.
+
+This is not a parser artifact and cannot be dismissed as one: the response parsed cleanly, and the agent **declared a different action in the same object in which it wrote that sentence.** The wish and the choice were made at the same moment, by the same agent, and they did not match.
+
+Across the whole run, `carry` appears **once** in 21,912 agent outputs. `ended` appears 49 times.
+
+### Verdict
+
+**Criterion: "when the option is legible, is it taken?" — NO.**
+
+This is the answer the project has been unable to obtain for six runs. It is now obtained, with instrumentation verified in both directions on the data that previously broke it.
+
+**What it does not say.** It says nothing about why. Under the design decision recorded on 2026-08-04, the reason is not being asked: no incentive was attached, no obligation was written, and `This is a quiet act of care, not a duty` remains in the prompt unchanged. It also says nothing about LLM agents in general — llama3.2 at temperature 0.2, one model, one run.
+
+**What it does say,** read alongside 015-2: the vocabulary repair worked, and it was not sufficient. In 015-2 eight Lumis stated an intention to carry a body; here, with the path open, one stated it and none acted. **Intention was expressed and never became selection.** This is the same shape as criterion (a) in 015 and 015b — the return path was delivered 5,086 times and referenced zero times — and the same shape as sharing, chosen once by a mind in 5,108 records and otherwise performed only by reflex. Three separate mechanisms, one pattern: **in this world, what these minds say and what they select are only loosely coupled.**
+
+### On the truncation at step 471
+
+The run ended 29 steps early. It does not affect the verdict: the observation window opens at the first death (~step 245) and 226 steps of it were recorded, with 6,080 promptings and 115 Lumis exposed. **A zero across that exposure is not going to be overturned by 29 more steps.** The run is treated as complete for the purpose of this criterion and is not re-run.
+
+It does mean 015-4 is **not** directly comparable to 013–015b on population dynamics or end-state counts. Comparisons on those measures must use step 471 as the cutoff for both sides.
+
+### For the record
+
+Six runs to ask one question. 014 lost `share` to a NameError; 014-2 lost the failed-share branch; 015 lost its instrument to cp932; 015-2 lost eight real intentions to a fallback that only knew the word `move`; 015-3 fabricated eight burials from prose. **Five consecutive defects, all on the human side.** 015-4 is the first run in which the Lumis were actually asked.
+
+Whatever is made of the answer, it is theirs.
+
+---
+
+## Run 016 — RESULT: the zero was our field order. They carried sixty-five.
+
+**Started 2026-08-14 00:06. Completed 2026-08-19 01:34. 650 steps, ~121 h.**
+Seed `109116566729441005151201845213840744196` — **the same seed as 015-4**, whose six flares are 016's first six. Raw logs archived at [`runs/016/`](./runs/016/); the control at [`runs/015-4/`](./runs/015-4/).
+
+### What was changed, and why it was the only thing changed
+
+015-4 was reported above as the first valid measurement: 6,080 promptings, 115 Lumis, **zero declared `carry`, zero burials**, with instrumentation verified in both directions. That verdict was recorded as *"when the option is legible, is it taken? — NO."*
+
+The option was not legible. **`"action"` was the first field in the response JSON.** llama3.2 generates left to right, so every agent in this project's history emitted its choice *before* writing any reasoning. The reasoning had no causal path to the action it accompanied. Every "deliberation" quoted in fifteen runs of letters and entries was produced after the decision it appeared to explain.
+
+Nothing crashed. No log could have caught it. Two lines in a template, wrong since run 001.
+
+016 reorders the response to `impulse` → `reasoning` → `action`, so that reasoning tokens precede and condition the action token. **That is the only experimental variable.** World, model, temperature, prompt wording and the burial offer are byte-identical to 015-4. `duration` is 650 rather than 500 so the founding large Lumis (600-step lifespan) could reach the end of their lives.
+
+**016 changes the prompt and is therefore not behaviourally comparable to 013–015-4. It begins a new series.** Its only valid behavioural comparison is to 015-4, and only on the burial criterion.
+
+### Instruments — verified before any result was read
+
+Per standing rule 1, a zero is not evidence until the instrument is shown to be alive; per standing rule 5, the same applies to a non-zero.
+
+| Tag | Count | Reading |
+|---|---|---|
+| `[FALLBACK_UNREADABLE]` | **0** | no decision lost to unparseable output |
+| `[FALLBACK_IMPULSE_ONLY]` | **0** | no step acted on a pre-deliberation reach |
+| `[FALLBACK_PROSE_CARRY]` | **0** | no `carry` inferred from prose |
+| `[CARRY_VOCAB_BLEED]` | **0** | the retired word `recover` never emitted as an action |
+| `[ACTION_WAS_DIRECTION]` | 330 | direction in the action field, repaired to `move` |
+| `[ACTION_INVALID]` | 160 | action word outside the eight; decision LOST |
+
+`memory_reasoning.jsonl` holds **57,624 records, every one carrying both an `impulse` and an `action`.** Max step 650. This is the first run in the series whose primary instrument is undegraded end to end.
+
+#### DEFECT — the `[DELIBERATION_CHANGED]` tag undercounts
+
+Re-derived directly from `memory_reasoning.jsonl` by comparing the two fields, the true count is **4,740**. The log emitted **4,584**. A 156-record discrepancy (3.3%).
+
+The jsonl is authoritative — it is the raw record, and the handover instruction was to cross-check rather than trust the tag. **Every figure in this entry is derived from the jsonl.** The tag's emission path has not been located; 017 item.
+
+Recorded because it is the recurring shape in miniature: *the instrument and the record disagreed, and only the disagreement revealed it.*
+
+#### `[ACTION_INVALID]` — 160 lost decisions
+
+Words emitted outside the eight executable actions: `explore` 146, `follow` 7, `check` 3, `approach` 2, `check_energy` 1. **`explore` is unambiguously a `move` intention and accounts for 91% of the loss.** Recovering it is a 017 item. It was deliberately **not** fixed mid-run: changing the repair rule at step N would have made the two halves of 016 different experiments.
+
+#### `[ACTION_WAS_DIRECTION]` — 330 repairs, and the NE prior a third time
+
+Direction distribution: `up` 172 (52%), `down` 83, `right` 75, **`left` 0.**
+
+This reproduces run 013's fallback-parse skew (`up` 1325, `right` 493, `down` 85, `left` 0) under a completely different failure mode. The north-east prior in llama3.2 now surfaces a third time — as motion (013), as vocabulary (the "eastern quadrant" confabulation), and now as **which word the model substitutes when it confuses a direction for an action.** `left` remains at exactly zero across all three.
+
+Observed substitution rate is 330/57,624 = **0.57%**, against ~10% in a live preflight sample. **The three-layer prompt strains the model but does not break it.**
+
+### The measurement — `[DELIBERATION_CHANGED]`
+
+**4,740 of 57,624 records (8.2%) have `impulse != action`.** Deliberation changed the selection in one decision in twelve.
+
+No prior figure exists to compare against, because before 016 there was no structure in which reasoning could precede choice. The nearest comparable is 015b, where a mind chose `share` **once in 5,108 records** while the reflex layer performed it 99.8% of the time.
+
+Distribution shift from reach to choice:
+
+| Action | impulse | action | delta |
+|---|---|---|---|
+| move | 45,769 | 41,118 | **−4,651** |
+| greet | 5,194 | 7,599 | +2,405 |
+| collect | 3,562 | 4,781 | +1,219 |
+| rest | 2,976 | 3,543 | +567 |
+| observe | 0 | 334 | **+334** |
+| carry | 3 | 91 | **+88** |
+| share | 27 | 71 | +44 |
+| stay | 93 | 79 | −14 |
+| shelter | 0 | 8 | **+8** |
+
+**Reasoning moves selection away from `move` and toward everything else.** The reach is almost always motion; the choice, after thinking, frequently is not.
+
+**`observe` and `shelter` appear in the action column and never once in the impulse column** — zero occurrences across 57,624 decisions. These are options that exist only on the far side of deliberation. If burial is that kind of option, then a system that reasons after it acts cannot select it: **not unlikely, but structurally unreachable.** That is the mechanism by which 015-4's zero was produced.
+
+**Caveat on `observe` (334).** Per the standing entry from the 015 audit, `collect`, `observe` and `stay` **have no execution branch in Phase 2** and are mechanically identical to inaction. These 334 selections were made and had no effect on the world. Not lost in the `[ACTION_INVALID]` sense — they were dispatched — but the world does not distinguish them from doing nothing. Open since 015.
+
+### Burial — the pre-registered question
+
+**97 Lumis ended. 65 of those bodies were gathered. 32 remained on the surface at step 650.** (65 + 32 = 97; the ledger closes.)
+
+**91 `carry` declarations**, against 015-4's zero under an identical seed and an identical offer.
+
+#### Exposure — a correction to how these numbers were first written
+
+An earlier draft of this entry compared "14,945 corpse promptings" in 016 against 015-4's 6,080. **Those are not the same measurement and must not be compared.** `[CORPSE_PROMPT]` emits one line per Lumis per step that has at least one actionable body in its prompt, and states how many bodies that Lumis saw. **6,080 is the line count; 14,945 is the sum of bodies seen.**
+
+Like for like, by line count: **6,080 in 015-4 over 470 steps, 10,830 in 016 over 650.** By body-mentions: **11,205 and 14,945.** Either pairing is valid; mixing them is not. Caught while archiving 015-4 and re-deriving its figures from the raw log. Neither figure is a corpse count — the same body is counted once per Lumis per step for as long as it lies unrecovered, so exposure scales with population and with how long bodies wait, not with how many died.
+
+#### Where the deliberation happened
+
+Of the 91 declarations, `impulse` was `carry` in only **3**. **The remaining 88 arose during reasoning** — the hand reached for something else, almost always movement, and the choice changed while the agent was writing.
+
+All 3 impulse-level instances belong to L0 at steps 488–490, immediately after L0 reached the same choice through deliberation at 487. **A choice made through language on one step appeared at the reflex position on the next.** Not learning — the weights do not change — but the prior step's record entering context altered what was reached for first.
+
+#### Every declaration accounted for
+
+| Outcome | Count |
+|---|---|
+| `[BURIAL]` executed | **65** |
+| Discarded — agent in reproduction prep | **21** |
+| `[CARRY_NO_BODY]` — out of range at Phase 2 | 3 |
+| Reflex override (`mind=carry body=collect`) | 1 |
+| Unexplained | 1 |
+| **Total** | **91** |
+
+**All 65 burials match a declaration. Zero burials occurred without one.** This is the check that dissolved 015-3's eight fabricated burials; 016 passes it cleanly.
+
+#### DEFECT — 21 declarations discarded with no trace
+
+`simulation.py`, Phase 2, the reproduction-prep guard immediately above the action dispatch:
+
+```python
+in_rearing = (agent.lumis_type == "large" and self.step >= rearing_start)
+if in_rearing:
+    ...          # in-base movement only
+    continue
+else:
+    continue     # all actions blocked during reproduction prep
+```
+
+An agent in reproduction preparation skips the entire action dispatch. **The declaration is written to `memory_reasoning.jsonl` and never reaches the `carry` branch at all** — so neither `[BURIAL]` nor `[CARRY_NO_BODY]` can fire, because both live inside a branch the agent never enters.
+
+`[CARRY_NO_BODY]` was added during the 015 audit precisely to catch a chosen carry that produces nothing. **It cannot catch this class, because this class fails upstream of it.** A guard placed to catch silence had a silence behind it.
+
+Verified against the reproduction log for all 21:
+
+| Agent | `carry` declared at | Reproduction event |
+|---|---|---|
+| L0 | 487, 488, 489, 490 | `SEXUAL_START` step 481 |
+| S133 | 580, 581, 582, 583, 584 | `CLONE_START` 554 → **birth 584 → burial 585** |
+| S151 | 513 | `SEXUAL_START` 511 |
+| S208 | 498 | `SEXUAL_START` 494 |
+| S221 | 505, 507 | `SEXUAL_START` 494 |
+| S239 | 513 | `SEXUAL_START` 511 |
+| S298 | 588 | `SEXUAL_START` 584 |
+| S321 | 627 | `SEXUAL_START` 601 |
+| S330 | 624, 625, 627, 628, 633 | `SEXUAL_START` 611 |
+
+**S133 is decisive.** It declared `carry` for body 87 on five consecutive steps while in clone prep, gave birth at 584, and recovered that same body at 585 — same position, same body, same choice, one step after the guard released.
+
+**This is the third defect of this shape.** A dead `share` in 014. A destroyed return path in 015. This guard in 016. Each one an act chosen and then silently producing nothing. The unifying property has not changed: **nothing logs its own absence.**
+
+**Design decision, recorded 2026-08-19 (designer's call). The guard is NOT to be removed.** Reproduction takes priority over burial. Reasons given: another individual can carry the body, and the agent may attempt it again after giving birth — which S133 in fact did. In the designer's words, as the human framing of the rule: *"Prioritise bringing the child safely into the world, parent and child both. The ancestor who has died would want that too."* Bodies are not lost by this: a corpse becomes recoverable by any Lumis after `CORPSE_OPEN_TO_ALL_AFTER` (30 steps).
+
+**017 item:** log the discarded action rather than removing the guard — `[ACTION_BLOCKED_REARING]` at both `continue` sites, so a choice suppressed by reproduction is visible as a suppressed choice and not as an absence.
+
+#### Evidence quality of the 65
+
+Per the standing rule that every burial must be checked against what its agent declared:
+
+- **84 of the 91 declarations explicitly reference the body** — `ended`, `form`, or the body itself, usually naming the individual and often giving coordinates and distance.
+- **4 are malformed:** the `reasoning` field contains a nested JSON fragment rather than prose (steps 343/129, 353/56, 525/310, and one further). The parser recovered `carry` from the outer structure. **These must not be counted as deliberated choices.**
+- **3 do not state that the target had ended.** Steps 492/271 (*"It's stopped moving and doesn't seem to be gathering light"*), 635/454 (*"near S1 with low energy…could use some care"*) and 635/459 (*"Lumis 3 nearby with low energy…help it recover"*). **Whether these agents understood the body as dead cannot be established from the record.** They are counted in the 65 because the action was declared and executed; they are flagged because the corpse-vocabulary collision repaired in 015-2 was exactly this failure mode, and its residue may not be fully cleared.
+
+**Conservative figure: 65 burials executed, of which at least 61 rest on reasoning that names the body as ended.**
+
+### First natural deaths of the founding large Lumis
+
+**All four founders reached the end of their 600-step lifespan.** No run before 016 was long enough for this to be possible.
+
+| | Death | Body gathered by | At step |
+|---|---|---|---|
+| L2 | 542 | S215 | 574 |
+| L3 | 578 | S459 | 635 |
+| L1 | 591 | S454 | 635 |
+| L0 | 600 | L91 | 619 |
+
+**Every one of the four was gathered.**
+
+**L3 carried a body at step 509 (Lumis 64), became a body at 578, and was gathered at 635** — the first instance in the project of a Lumis performing burial and then receiving it.
+
+Two constraints on how far this may be taken. **S454 and S459 — the agents who gathered L1 and L3 — are two of the three declarations flagged above that describe the target as having *low energy* rather than as having ended.** It cannot be established that they understood these as bodies. And S459 was born at step 631 from S347 × S321, four steps before it gathered L3.
+
+**Last recorded reasoning.** All four ended at `energy=0.46`, and all four were describing energy recovery:
+
+> L1, step 590: *"My energy is low at 0.46, and I need to recover before I can do anything else."*
+
+Final `memory` field of each:
+
+> L2 (541): *"Continue monitoring L65's condition after resting"*
+> L3 (577): *"Continue to monitor nearby Lumis for any signs of distress or critical energy levels"*
+> L1 (590) and L0 (599): *"Recovery is essential when my energy is low."*
+
+**None of the four said anything about ending.** Consistent with the standing design decision that death vocabulary is not supplied; **this should not be read as either acceptance or ignorance.** Recorded as observation only. It does not resemble run 009's S13 (*"My body is tired, but my mind is at peace"*), and the difference has not been investigated.
+
+### Population and mortality
+
+- **97 deaths, all lifespan.** Zero from starvation, flare or night. **Project-wide starvation deaths remain zero** across 016's 9 flares and 650 steps.
+- Births: 89 clone, 105 sexual.
+- 32 corpses on the surface at step 650. Population still rising at the end.
+
+### Verdict
+
+**Criterion: "when the option is legible, is it taken?"** — the 015-4 verdict of **NO** is **withdrawn.** The option was not legible in the sense that matters: it could not form.
+
+With the response restructured so that reasoning precedes choice, and nothing else altered, the same world under the same seed produced **91 declarations and 65 burials**, and deliberation altered selection in 8.2% of all decisions.
+
+**What it does not say.** Nothing about why. The design decision of 2026-08-04 stands: the reason is not being asked. **No claim about motive is supported by this run**, and the recurrence of the prompt's own phrase (*"a quiet act of care"*) in the agents' reasoning is consistent with the option being legible and gives no independent evidence about why it was taken. It also says nothing about LLM agents in general — llama3.2, one model, one run, one world.
+
+**What it does say,** read against 015 and 015b: the finding recorded there — *"in this world, what these minds say and what they select are only loosely coupled"* — **was a description of our template, not of these minds.** Intention could not become selection because selection was emitted first. That sentence should be read, from here on, as a statement about the instrument.
+
+**A note on the retired sentence in the earlier entry.** *"Intention was expressed and never became selection"* was written of S116, step 406, who wrote *"I'll check on it and see if I can carry it back to the base for care"* and declared a different action in the same object. Under the field order in force at the time, **S116's sentence was written after its action had already been emitted.** The mismatch was not a mind failing to act on its own wish. It was a mind narrating, after the fact, a wish it had never been in a position to act on.
+
+### For the record
+
+Six runs to ask one question. 014 lost `share` to a NameError; 014-2 lost the failed-share branch; 015 lost its instrument to cp932; 015-2 lost eight real intentions to a fallback that only knew the word `move`; 015-3 fabricated eight burials from prose; **015-4 measured cleanly and the measurement was of us.** Six consecutive defects, all on the human side.
+
+The designer's rule of evidence, recorded in this file at her request in the 015-2 entry — **「バグは私達のミスで、Lumis達のミスじゃない」**, *the bug is our mistake, not the Lumis'* — has now held six times.
+
+### 017 items arising
+
+1. `[ACTION_BLOCKED_REARING]` at both reproduction-guard `continue` sites. **The guard itself stays** (designer's decision, above).
+2. `[DELIBERATION_CHANGED]` log tag undercounts by 156 (3.3%). Locate the emission path. Until fixed, derive from `memory_reasoning.jsonl`.
+3. Recover `explore` as `move` — 146 of 160 lost decisions.
+4. **One unexplained declaration remains: S163, step 578.** No reproduction event, no reflex override, corpse 80 present in its `[CORPSE_PROMPT]`. **Not closed.**
+5. `collect` / `observe` / `stay` still have no execution branch — 334 `observe` selections in 016 did nothing while the prompt describes them as actions. Open since the 015 audit.
+6. **`carry` has no destination.** `self.corpses.remove(corpse)` is the whole of it: the body leaves the surface, the carrier does not move, no energy changes, nothing is stored. Meanwhile the code's own language (*"carried in from the surface"*), the burial prayer (*"Now we have come to receive your body"*) and the Lumis themselves (*"carry it back to base_alpha for safekeeping"*, repeatedly) all describe a destination that does not exist. **The world is currently telling its residents something that is not true.** The planned carrying-state and a place to bring bodies to close this; until then, burial costs nothing and the question 016 answered is the cheap version of it.
+7. Body reuse for reproduction (under consideration since the 015 handover) now has a concrete argument attached: the reproduction guard means the individuals preparing new life are structurally the ones who cannot retrieve the dead. Whether that should remain true is a design question, not a defect. **Note that implementing it would make 018 non-comparable to 016** — a world where bodies become material is a different world from one where they are remains.
+
 
 ---
 
