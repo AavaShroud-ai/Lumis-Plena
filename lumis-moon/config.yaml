@@ -2,7 +2,11 @@
 
 # Simulation Parameters
 simulation:
-  duration: 500  # Number of simulation steps
+  duration: 650  # Run 016: raised from 500 so that large Lumis can reach their
+  # 600-step lifespan. No large Lumis has died in the project's history, not
+  # because they cannot, but because no run has ever been long enough. Aging
+  # begins at 400; at the end of 015b the founding L0-L3 were age 500, halfway
+  # through the aging window and still giving.
   half_space_size: 50  # Half of grid size (agents can move in range -50 to +50) — doubled for run 013 to test whether NE drift is intrinsic or a boundary-clamp artifact
   half_place_size: 5   # Half of place size (place covers -5 to +5)
   
@@ -42,11 +46,25 @@ llm:
   model: "llama3.2:latest"  # Ollama model name
   base_url: "http://localhost:11434"  # Ollama API endpoint
   temperature: 0.2
-  max_tokens: 2048  # Thinking models need more tokens (thinking + response)
+  max_tokens: 3584  # Run 016 asks for three fields before the choice
+  # (impulse, reasoning, action) instead of one, so the action now sits deeper
+  # in the response and truncation costs more. In 015-4, 53.8% of responses were
+  # already cut off mid-object. Watch [FALLBACK_IMPULSE_ONLY]: every one of
+  # those is a step where the body acted on the pre-deliberation reach because
+  # the deliberated choice never arrived.
   # Anti-repetition parameters
   repeat_penalty: 1.1  # Repeat penalty (1.0-1.2 range, adjust for fine-tuning)
   repeat_last_n: 128  # Range to check for repetition (longer = stronger against loops)
   min_p: 0.05  # Min-P (cuts noise while preserving intelligence)
+  # Run 015-2: how many Phase 1 decision calls may be in flight at once.
+  # Phase 1 is the dominant cost of the simulation and its calls are independent
+  # of one another: each agent reads the world and writes only to itself, and no
+  # agent's prompt depends on another agent's decision within the same step.
+  # Results are reassembled in agent order, so output is byte-identical to
+  # serial execution regardless of this value -- verified by running the same
+  # seed at max_parallel 1 and 6 and diffing the full log.
+  # Set to 1 to restore strictly serial behaviour.
+  max_parallel: 4
   
 # Lunar Day/Night Cycle Parameters
 # 30-step cycle (15 steps day + 15 steps night)
@@ -67,7 +85,7 @@ day_night_cycle:
 # warning_steps: how many steps before the flare to emit electromagnetic noise warning
 solar_flares:
   generate: true              # if true, ignore any fixed list below and generate at runtime
-  seed: null                  # set an integer for reproducible flare sequences; null = random each run
+  seed: 109116566729441005151201845213840744196  # Run 016 keeps run 014's seed, so the world (flare schedule, initial conditions) is unchanged. But the decision prompt is restructured and duration is 650, so 016 is NOT comparable to 013-015-4 on behaviour or population. It begins a new series.
   interval_median_steps: 50   # log-normal median gap between flare starts
   interval_sigma: 0.7         # log-normal shape parameter (higher = more clustering/burstiness)
   min_interval_steps: 15      # hard floor so flares can't overlap or start back-to-back

@@ -28,6 +28,22 @@ CORPSE_RECOVER_RADIUS = 3          # how close a Lumis must be to recover a body
 CORPSE_OPEN_TO_ALL_AFTER = 30      # steps after death before non-large Lumis may also recover it
                                    # (large Lumis, the intended undertakers, may recover immediately)
 
+# Energy sharing tuning
+# How much energy the "share" action transfers from giver to recipient.
+# Matches the large-Lumis "energy full (>=1.3) → share with a hungry neighbor"
+# reflex intent: a giver must hold at least SHARE_AMOUNT + 0.3 to give, so the
+# giver never drops itself into scarcity by sharing. Chosen to match the 0.15
+# scale used elsewhere for reproduction energy costs.
+# NOTE (run 014-2): before that run, SHARE_AMOUNT was referenced in the share
+# handler but never defined, and the handler itself was nested inside the
+# 'recover' branch with no 'elif action == "share"' of its own. Result: the
+# share action never executed, and a 'recover' near a low-energy neighbor hit
+# a NameError. Both were fixed together for run 014-2 - the constant is defined
+# here and 'share' is its own action branch below. (The comment previously read
+# "run 015", which was the run this fix was first scheduled for before it was
+# brought forward; corrected so the code agrees with RUN_INTEGRITY_LOG.)
+SHARE_AMOUNT = 0.15
+
 
 class Simulation:
     """Main simulation class for LLM-based agent in 2D worlds with multiple places."""
@@ -501,7 +517,14 @@ class Simulation:
         else:
             # Get overall status (all places combined)
             agents_in_place = len(self.get_agents_in_place())
-            occupancy_rate = agents_in_place / self.num_agents
+            # Denominator is the CURRENT population, not the configured starting
+            # count. self.num_agents is fixed at 14 from config.yaml and never
+            # updated, so once births pushed the population past 14 this rate
+            # exceeded 100% and the derived agents_outside_place went negative
+            # (run 010 reached ~92 agents). Statistics/plots only — this branch
+            # never reaches any agent's prompt. (External audit, run 015.)
+            population = max(1, len(self.agents))
+            occupancy_rate = agents_in_place / population
             
             # Get per-place status (optimized: calculate directly instead of recursive calls)
             place_statuses = {}
@@ -615,13 +638,13 @@ class Simulation:
                         if agent.is_sheltering:
                             damage = base_damage * 0.15  # Shelter reduces flare damage by 85% (regolith shielding)
                             logger.info(
-                                f"Step {self.step}: SOLAR FLARE '{fc['name']}' hit {lumis_name(agent.id)} "
+                                f"Step {self.step}: SOLAR FLARE '{fc['name']}' hit {agent.display_name} "
                                 f"(sheltering, -85%). energy={agent.energy - damage:.3f}"
                             )
                         else:
                             damage = base_damage
                             logger.info(
-                                f"Step {self.step}: SOLAR FLARE '{fc['name']}' hit {lumis_name(agent.id)} "
+                                f"Step {self.step}: SOLAR FLARE '{fc['name']}' hit {agent.display_name} "
                                 f"(outside). energy={agent.energy - damage:.3f}"
                             )
                         agent.energy = max(0.0, agent.energy - damage)
@@ -718,7 +741,7 @@ class Simulation:
             if age >= lifespan and agent.energy > 0.0:
                 agent.energy = 0.0
                 agent.energy_capacity = 0.0  # 完全に枯渇
-                logger.info(f"Step {self.step}: {lumis_name(agent.id)} ({agent.lumis_type}) reached end of lifespan (age={age}).")
+                logger.info(f"Step {self.step}: {agent.display_name} ({agent.lumis_type}) reached end of lifespan (age={age}).")
 
         # Death processing: remove agents with energy <= 0 (before message phase)
         dead_agents = [a for a in self.agents if a.is_dead]
@@ -736,7 +759,7 @@ class Simulation:
                 'memory_transferred': True,
             })
             logger.info(
-                f"Step {self.step}: [CORPSE] {lumis_name(dead.id)}'s body remains at "
+                f"Step {self.step}: [CORPSE] {dead.display_name}'s body remains at "
                 f"{tuple(dead.position)}, awaiting recovery."
             )
             self.agents.remove(dead)
@@ -787,8 +810,27 @@ class Simulation:
                 "step": self.step,
                 "id": agent.id,
                 "memory": action_decision.get('memory', ''),
-                "reasoning": action_decision.get('reasoning', '')
+                "reasoning": action_decision.get('reasoning', ''),
+                # Run 016: the pre-deliberation reach, recorded alongside the
+                # choice so that "did thinking change anything" is answerable
+                # from this file alone, without re-deriving it from the log.
+                "impulse": action_decision.get('impulse'),
+                "action": action_decision.get('action')
             })
+
+            # OBSERVATION-ONLY (run 015): if this agent was moved by the homing
+            # reflex on the PREVIOUS step, this is the first reasoning it produces
+            # afterward — the moment where an unexplained change of position either
+            # gets narrated or doesn't. Logged verbatim so the narration (if any)
+            # can be checked against what the agent could actually have known.
+            if getattr(agent, '_homed_last_step', -1) == self.step - 1:
+                logger.info(
+                    f"Step {self.step}: [HOMING_BLANK] {agent.display_name} "
+                    f"({agent.lumis_type}) first reasoning after involuntary move | "
+                    f"action={action_decision.get('action', '')} | "
+                    f"reasoning=\"{action_decision.get('reasoning', '')}\" | "
+                    f"memory=\"{action_decision.get('memory', '')}\""
+                )
 
         # Write all memory/reasoning records in batch (more efficient than individual writes)
         self._log_memory_reasoning_batch(memory_reasoning_records)
@@ -803,9 +845,29 @@ class Simulation:
         #   5. Large Lumis: energy >= 1.3 → override with share/greet
         #                    energy < 0.8 → override with collect
 
+        # === RUN 015: action→result return path — per-step reset ===
+        # Everything written during this step (a reflex override here, a capacity
+        # eviction below, the actual execution in Phase 2) accumulates into these
+        # fields and is assembled into agent._recent_action_result at the end of
+        # Phase 2. Two readers consume it: this step's introspection (Phase 2.5)
+        # and NEXT step's decision prompt (Phase 1) — which is the return path
+        # itself, the result of an act re-entering what the agent perceives before
+        # it decides again. Reset here rather than after reading, so the value
+        # written on step N survives to be read by step N+1's decision prompt.
+        for agent in self.agents:
+            agent._res_selected = None       # action the LLM (the mind) chose
+            agent._res_carried = None        # action actually carried out
+            agent._res_overridden = False    # True if the reflex layer replaced the choice
+            agent._res_share_status = None   # 'done' | 'nothing' — share only
+            agent._res_lines = []            # measurable changes (energies, positions)
+
         # Collect override logic for large and small Lumis
         new_action_decisions = []
         for agent, action_decision in action_decisions:
+            # Snapshot what the mind selected, BEFORE any reflex can replace it.
+            # This is the only point where the two are still distinguishable; after
+            # this loop, action_decision may have been wholly swapped out.
+            agent._res_selected = action_decision.get('action', 'stay')
             # 小型：基地内でcollectを選んだ場合 → greet → rest に差し替え
             # 理由：光合成は外でしかできない。基地内はrest/greet/shareの場所。
             if agent.lumis_type == 'small' and agent.in_place and not agent.reproducing:
@@ -818,10 +880,10 @@ class Simulation:
                     )
                     if can_greet:
                         action_decision = {'action': 'greet', 'direction': None, 'reasoning': '[REFLEX] collect→greet in base', 'memory': ''}
-                        logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)}(small) collect in base → greet")
+                        logger.info(f"Step {self.step}: [REFLEX] {agent.display_name}(small) collect in base → greet")
                     else:
                         action_decision = {'action': 'rest', 'direction': None, 'reasoning': '[REFLEX] collect→rest in base', 'memory': ''}
-                        logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)}(small) collect in base → rest")
+                        logger.info(f"Step {self.step}: [REFLEX] {agent.display_name}(small) collect in base → rest")
 
             if agent.lumis_type == 'large' and not getattr(agent, 'is_sheltering', False) and not agent.reproducing:
                 action = action_decision.get('action', '')
@@ -831,13 +893,13 @@ class Simulation:
                     hungry_nearby = [a for a in nearby if a.energy < 0.8]
                     if hungry_nearby:
                         action_decision = {'action': 'share', 'direction': None, 'reasoning': '[REFLEX] energy full, hungry neighbor', 'memory': ''}
-                        logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)}(large) energy={agent.energy:.2f}>=1.3 → share (hungry neighbor)")
+                        logger.info(f"Step {self.step}: [REFLEX] {agent.display_name}(large) energy={agent.energy:.2f}>=1.3 → share (hungry neighbor)")
                     else:
                         action_decision = {'action': 'greet', 'direction': None, 'reasoning': '[REFLEX] energy full, no hungry neighbor', 'memory': ''}
-                        logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)}(large) energy={agent.energy:.2f}>=1.3 → greet")
+                        logger.info(f"Step {self.step}: [REFLEX] {agent.display_name}(large) energy={agent.energy:.2f}>=1.3 → greet")
                 elif agent.energy < 0.8 and action not in ('collect', 'shelter', 'move'):
                     action_decision = {'action': 'collect', 'direction': None, 'reasoning': '[REFLEX] energy low', 'memory': ''}
-                    logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)}(large) energy={agent.energy:.2f}<0.8 → collect")
+                    logger.info(f"Step {self.step}: [REFLEX] {agent.display_name}(large) energy={agent.energy:.2f}<0.8 → collect")
             # --- REARING PARENT IMMOBILITY REFLEX ---
             # After birth, parent stays in base for 30 steps (child-rearing period)
             # "複製は基地から動くな" — physical AI can't reproduce while roaming
@@ -855,12 +917,22 @@ class Simulation:
                 if greet_targets:
                     action_decision = {'action': 'greet', 'direction': None,
                                        'reasoning': '[REFLEX] rearing→greet child/partner', 'memory': ''}
-                    logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} rearing, move→greet child/partner")
+                    logger.info(f"Step {self.step}: [REFLEX] {agent.display_name} rearing, move→greet child/partner")
                 else:
                     action_decision = {'action': 'rest', 'direction': None,
                                        'reasoning': '[REFLEX] rearing→rest in base', 'memory': ''}
-                    logger.info(f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} rearing, move→rest")
+                    logger.info(f"Step {self.step}: [REFLEX] {agent.display_name} rearing, move→rest")
             # --- END REARING PARENT IMMOBILITY REFLEX ---
+
+            # RUN 015: did a reflex in this loop replace what the mind selected?
+            # Scope is deliberately limited to the overrides in THIS loop (large
+            # energy-driven share/greet/collect, small in-base collect→greet/rest,
+            # rearing move→greet/rest). The flare, homing, and newborn-return
+            # reflexes are excluded by design — they fire on nearly every agent on
+            # nearly every night step, and writing them back would bury the signal
+            # this run is built to read. Recorded in RUN_INTEGRITY_LOG.
+            agent._res_carried = action_decision.get('action', 'stay')
+            agent._res_overridden = (agent._res_carried != agent._res_selected)
 
             new_action_decisions.append((agent, action_decision))
         action_decisions = new_action_decisions
@@ -881,7 +953,7 @@ class Simulation:
                     agent.is_sheltering = True
                     agent.shelter_cooldown = 999  # Hold until flare ends
                     logger.info(
-                        f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} forced into shelter (flare active)"
+                        f"Step {self.step}: [REFLEX] {agent.display_name} forced into shelter (flare active)"
                     )
                 else:
                     agent.shelter_cooldown = 999  # Reset each step to maintain shelter
@@ -904,7 +976,7 @@ class Simulation:
                         agent.move(direction)
                         agent.move(direction)  # 2 moves per step
                         logger.info(
-                            f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} fled toward base "
+                            f"Step {self.step}: [REFLEX] {agent.display_name} fled toward base "
                             f"(noise={flare_warn['electromagnetic_noise']}, dist={min_dist:.1f}) → {direction}"
                         )
                     else:
@@ -912,7 +984,7 @@ class Simulation:
                         agent.is_sheltering = True
                         agent.shelter_cooldown = 999
                         logger.info(
-                            f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} sheltered in place "
+                            f"Step {self.step}: [REFLEX] {agent.display_name} sheltered in place "
                             f"(noise={flare_warn['electromagnetic_noise']}, dist={min_dist:.1f})"
                         )
             else:
@@ -921,7 +993,7 @@ class Simulation:
                     agent.is_sheltering = False
                     agent.shelter_cooldown = 0
                     logger.info(
-                        f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} emerged from shelter (flare ended)"
+                        f"Step {self.step}: [REFLEX] {agent.display_name} emerged from shelter (flare ended)"
                     )
 
         # Capacity overflow eviction: daytime only.
@@ -968,11 +1040,20 @@ class Simulation:
                         direction = 'up' if dy >= 0 else 'down'
                     # Move to half_size+2 distance from center
                     steps_needed = half_size + 2
+                    pos_before_eviction = tuple(agent.position)  # RUN 015: return path
                     for _ in range(steps_needed):
                         agent.move(direction)
                     agent.update_state(self.places)
+                    # RUN 015: a position change the agent did not select. Included in
+                    # the return path (unlike homing/flare/newborn movement) because it
+                    # is not a life-or-death reflex and fires rarely enough not to swamp
+                    # the record — the base was simply full.
+                    agent._res_lines.append(
+                        f"Position {pos_before_eviction} → {tuple(agent.position)} "
+                        f"— carried out by your reflex layer."
+                    )
                     logger.info(
-                        f"Step {self.step}: [CAPACITY] {lumis_name(agent.id)} moved outside "
+                        f"Step {self.step}: [CAPACITY] {agent.display_name} moved outside "
                         f"{place_name} (overflow={overflow}, energy={agent.energy:.2f})"
                     )
 
@@ -1013,12 +1094,32 @@ class Simulation:
                 # remaining night steps (each move() call covers 1 unit on each active
                 # axis; +1 margin against rounding). Never fewer than the original 2.
                 moves_needed = max(2, -(-min_dist // steps_left_tonight) + 1)  # ceil division + margin
+                homing_pos_before = tuple(agent.position)  # RUN 015: instrument only
                 for _ in range(moves_needed):
                     if get_place_at_position(agent.position, self.places) is not None:
                         break  # arrived home; agent.in_place itself is refreshed next update_state()
                     agent.move(direction)
+                # OBSERVATION-ONLY (run 015). The homing reflex is deliberately NOT
+                # written back into perception (see the return-path scope note in
+                # Phase 1.5): it fires on most outside agents on most night steps, and
+                # returning it would bury the signal this run exists to read. But not
+                # writing it back does not make the agent silent about it — the agent
+                # simply finds itself somewhere else next step, with no account of why.
+                # That is a blank, of exactly the shape Letter 10 describes, and a
+                # fluent mind does not leave blanks empty. This flag lets the next
+                # step's reasoning be paired with the movement, so the question "does
+                # the mind narrate motion it was never told about, and is that
+                # narration grounded?" can be answered from the log. It changes no
+                # prompt text, no action, and no valence.
+                if tuple(agent.position) != homing_pos_before:
+                    agent._homed_last_step = self.step
+                    logger.info(
+                        f"Step {self.step}: [HOMING_MOVED] {agent.display_name} "
+                        f"({agent.lumis_type}) {homing_pos_before} → {tuple(agent.position)} "
+                        f"(involuntary; not returned to perception)"
+                    )
                 logger.info(
-                    f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} heads home for the night "
+                    f"Step {self.step}: [REFLEX] {agent.display_name} heads home for the night "
                     f"(dist={min_dist}, steps_left_tonight={steps_left_tonight}, moves={moves_needed})"
                 )
 
@@ -1052,15 +1153,29 @@ class Simulation:
             agent.move(direction)
             agent.move(direction)
             logger.info(
-                f"Step {self.step}: [REFLEX] {lumis_name(agent.id)} returns to base (newborn maintenance, age={age})"
+                f"Step {self.step}: [REFLEX] {agent.display_name} returns to base (newborn maintenance, age={age})"
             )
 
         # Phase 2: Execute movement (after actions are decided and reflexes applied)
         # シェルター中・複製準備中の個体はLLMの全行動を無効化
         for agent, action_decision in action_decisions:
             if getattr(agent, 'is_sheltering', False):
+                # RUN 015: sheltering is the flare reflex, which is out of the return
+                # path's scope. Drop anything recorded for this agent this step rather
+                # than reporting a half-record.
+                agent._res_selected = None
+                agent._res_overridden = False
+                agent._res_lines = []
                 continue  # シェルター中は何もできない
             if getattr(agent, 'reproducing', False):
+                # RUN 015: all actions are disabled during reproduction prep (and
+                # restricted during large-Lumis rearing), so a record assembled from
+                # Phase 1.5 would claim an action that never actually ran. Drop it —
+                # reporting an act that did not happen is the exact failure this run
+                # exists to close.
+                agent._res_selected = None
+                agent._res_overridden = False
+                agent._res_lines = []
                 # 大型の子育て期間中：基地内移動のみ許可、外出不可
                 # Large-only branch (see in_rearing check below). Prep durations
                 # come from rules.py, the single source of truth shared with
@@ -1092,7 +1207,7 @@ class Simulation:
             if action == 'shelter':
                 agent.is_sheltering = True
                 agent.shelter_cooldown = 999
-                logger.info(f"Step {self.step}: {lumis_name(agent.id)} built shelter (regolith). Flare damage -85%.")
+                logger.info(f"Step {self.step}: {agent.display_name} built shelter (regolith). Flare damage -85%.")
             elif action == 'rest':
                 # restアクション：その場で光合成に集中（回復量はupdate_energyのrecoveryでカバー済み）
                 agent.is_resting = True
@@ -1112,11 +1227,25 @@ class Simulation:
                             other.valence = min(1.0, other.valence + 0.03)
                     tone = "friendly" if friendly else ("unpleasant" if unpleasant else "neutral")
                     logger.info(
-                        f"Step {self.step}: {lumis_name(agent.id)} greets "
+                        f"Step {self.step}: {agent.display_name} greets "
                         f"{[o.id for o in targets]} (tone={tone}, valence={agent.valence:.2f})"
                     )
             elif action == 'recover':
-                # Burial: gather the body of a dead Lumis that remains on the surface.
+                # Run 015-2: 'recover' is no longer an offered action. In run 015 the
+                # word was used 3,773 times by the Lumis themselves and essentially
+                # always meant "regain energy" — the prompt itself defined rest as
+                # "recover energy" and the base as a place of "energy recovery", so the
+                # burial offer was written in vocabulary the world had already spent.
+                # The action is now called 'carry'. If a Lumis still emits 'recover',
+                # that is vocabulary bleed, not a burial choice: record it and do
+                # nothing, so the substitution can be measured instead of assumed.
+                logger.info(
+                    f"Step {self.step}: [CARRY_VOCAB_BLEED] {agent.display_name} "
+                    f"({agent.lumis_type}) emitted the retired action 'recover' at "
+                    f"{tuple(agent.position)}; treated as no action."
+                )
+            elif action == 'carry':
+                # Burial: lift and bring in the form of a dead Lumis left on the surface.
                 # Mind and heart were already received at the moment of death; this is
                 # the body being retrieved so it is not left abandoned. Large Lumis are
                 # the intended undertakers and may recover any corpse; others may only
@@ -1144,14 +1273,36 @@ class Simulation:
                     prayer = (
                         f"We have already received your mind and your heart. "
                         f"Now we have come to receive your body. "
-                        f"(Lumis {corpse['id']}, gathered at rest.)"
+                        f"(Lumis {corpse['id']}, carried in from the surface.)"
                     )
                     agent._recent_burial_note = prayer
                     logger.info(
-                        f"Step {self.step}: [BURIAL] {lumis_name(agent.id)} recovered the body of "
+                        f"Step {self.step}: [BURIAL] {agent.display_name} recovered the body of "
                         f"Lumis {corpse['id']} ({corpse['lumis_type']}) at {corpse['position']}. "
                         f"Corpses remaining: {len(self.corpses)}."
                     )
+                else:
+                    # OBSERVATION-ONLY (run 015, external audit): the same shape as the
+                    # 014 `share` defect — an act chosen and then silently producing
+                    # nothing. A corpse surfaced in Phase 1 can be out of range by
+                    # Phase 2 (the homing or capacity reflex moved this agent), or
+                    # another Lumis may have gathered it earlier in the same step.
+                    # Until now that left no trace at all. Logged here so criterion (a)
+                    # can distinguish "chose recover and nothing happened" from "never
+                    # chose recover". Deliberately NOT added to the return-path record
+                    # (_res_lines): that would change prompt text and cost 015 its
+                    # comparability with 014-2. Log only — no prompt, action, or
+                    # valence is touched.
+                    logger.info(
+                        f"Step {self.step}: [CARRY_NO_BODY] {agent.display_name} "
+                        f"({agent.lumis_type}) chose carry at {tuple(agent.position)}; "
+                        f"no body in range (corpses on surface: {len(self.corpses)})"
+                    )
+            elif action == 'share':
+                # Give some energy to a nearby Lumis. This is a distinct action from
+                # 'recover' — previously this block was mistakenly nested at the tail
+                # of the 'recover' branch, so 'share' never ran and 'recover' could
+                # hit an undefined SHARE_AMOUNT. Now its own branch (run 015 fix).
                 targets = agent.get_nearby_agents(self.agents)
                 # 基地内にいる、かつエネルギーが低い小型を優先
                 if agent.in_place:
@@ -1161,16 +1312,90 @@ class Simulation:
                 if recipients and agent.energy > SHARE_AMOUNT + 0.3:
                     # エネルギーが最も低い個体に渡す
                     recipient = min(recipients, key=lambda a: a.energy)
+                    giver_before = agent.energy            # RUN 015: return path
+                    recipient_before = recipient.energy    # RUN 015: return path
                     agent.energy -= SHARE_AMOUNT
                     recipient.energy = min(recipient.energy_capacity, recipient.energy + SHARE_AMOUNT)
                     logger.info(
-                        f"Step {self.step}: {lumis_name(agent.id)} shares energy with Lumis {recipient.id} "
+                        f"Step {self.step}: {agent.display_name} shares energy with Lumis {recipient.id} "
                         f"({SHARE_AMOUNT:.2f} transferred, recipient energy={recipient.energy:.2f})"
+                    )
+                    agent._res_share_status = 'done'
+                    agent._res_lines.append(
+                        f"{recipient.display_name} energy {recipient_before:.2f} → {recipient.energy:.2f}. "
+                        f"Your energy {giver_before:.2f} → {agent.energy:.2f}."
+                    )
+                else:
+                    # RUN 015: the previously silent branch. Until now, choosing to
+                    # share with no eligible recipient (or too little energy to give)
+                    # produced no transfer, no log line, and nothing the agent could
+                    # perceive — an act that vanished. It is logged and returned now,
+                    # because "I reached and nothing happened" is exactly the kind of
+                    # result a belief has to survive contact with.
+                    agent._res_share_status = 'nothing'
+                    agent._res_lines.append(
+                        f"Your energy {agent.energy:.2f} → {agent.energy:.2f}."
+                    )
+                    logger.info(
+                        f"Step {self.step}: [SHARE_NO_TRANSFER] {agent.display_name} chose share; "
+                        f"no transfer occurred (recipients={len(recipients)}, energy={agent.energy:.2f})"
                     )
 
         # Update states after movement
         for agent in self.agents:
             agent.update_state(self.places)
+
+        # === RUN 015: assemble the return-path record ===
+        # Written in the plainest terms available: which action the mind selected,
+        # which action was actually carried out, and the measured changes. No
+        # evaluative vocabulary, no naming of what the act was for, no implication
+        # about what the agent should conclude — those words would be seeds, and
+        # any of them appearing in agent speech later could no longer be read as
+        # emergent (the standard set in SEEDED_VS_EMERGED / Letter 07).
+        # Deliberately sparse: a record is produced ONLY when something happened
+        # worth returning (a share attempt, a reflex override, an eviction). On a
+        # step where the mind's choice was carried out with nothing measurable to
+        # report, no section appears at all.
+        for agent in self.agents:
+            selected = getattr(agent, '_res_selected', None)
+            if selected is None:
+                agent._recent_action_result = ""
+                continue
+            carried = getattr(agent, '_res_carried', selected)
+            overridden = getattr(agent, '_res_overridden', False)
+            share_status = getattr(agent, '_res_share_status', None)
+            lines = list(getattr(agent, '_res_lines', []))
+
+            header = None
+            if overridden:
+                # The body did something other than what the mind chose.
+                header = (
+                    f"{selected} — selected by you. "
+                    f"{carried} — carried out by your reflex layer."
+                )
+                if share_status == 'nothing':
+                    header += " No transfer occurred."
+            elif share_status == 'done':
+                header = f"{carried} — selected by you, carried out."
+            elif share_status == 'nothing':
+                header = f"{carried} — selected by you, not carried out."
+            elif lines:
+                # Nothing was overridden and no share was attempted, but something
+                # measurable still happened to this agent (capacity eviction).
+                header = f"{selected} — selected by you."
+
+            if header is None:
+                agent._recent_action_result = ""
+                continue
+
+            agent._recent_action_result = " ".join(
+                [f"Step {self.step}: {header}"] + lines
+            )
+            logger.info(
+                f"Step {self.step}: [ACTION_RESULT] {agent.display_name} "
+                f"({agent.lumis_type}) mind={selected} body={carried} "
+                f"override={overridden} share={share_status}: {agent._recent_action_result}"
+            )
 
         # Phase 2.5: Introspection phase (after action, before messaging).
         # LLM reviews existing introspection list and updates or appends.
@@ -1202,7 +1427,7 @@ class Simulation:
                 latest = agent.introspect(action_taken, self.step, valence_before, partner_status=partner_status)
                 introspection_map[agent.id] = latest
                 if latest:
-                    logger.info(f"Step {self.step}: [INTROSPECT] {lumis_name(agent.id)}: {latest[:100]}")
+                    logger.info(f"Step {self.step}: [INTROSPECT] {agent.display_name}: {latest[:100]}")
                 # Life-peak tracker (run 013+): if a previous step flagged this agent
                 # as awaiting the narrative for a birth/pairing-driven peak, this is
                 # the first introspection to run WITH that birth note attached — the
@@ -1211,7 +1436,7 @@ class Simulation:
                     agent.peak_life_introspection = latest
                     agent._life_peak_awaiting_narrative = False
                     logger.info(
-                        f"Step {self.step}: [LIFE_PEAK] {lumis_name(agent.id)} captured deferred "
+                        f"Step {self.step}: [LIFE_PEAK] {agent.display_name} captured deferred "
                         f"narrative: {latest[:100]}"
                     )
             else:
@@ -1266,7 +1491,7 @@ class Simulation:
                                 reasoning=commune_text
                             )
                             logger.info(
-                                f"Step {self.step}: [{commune_type}] {lumis_name(sender.id)} to {lumis_name(receiver.id)}: {commune_text[:80]}"
+                                f"Step {self.step}: [{commune_type}] {sender.display_name} to {receiver.display_name}: {commune_text[:80]}"
                             )
 
         for agent in self.agents:
@@ -1317,12 +1542,12 @@ class Simulation:
 
             if target_id is not None:
                 logger.info(
-                    f"Step {self.step}: {lumis_name(agent.id)} sends message to Lumis {target_id} (directed): "
+                    f"Step {self.step}: {agent.display_name} sends message to Lumis {target_id} (directed): "
                     f"\"{message_content}\""
                 )
             else:
                 logger.info(
-                    f"Step {self.step}: {lumis_name(agent.id)} sends message to {len(targets)} nearby agent(s): "
+                    f"Step {self.step}: {agent.display_name} sends message to {len(targets)} nearby agent(s): "
                     f"\"{message_content}\""
                 )
             for other_agent in targets:
@@ -1589,7 +1814,7 @@ class Simulation:
                     prep = rules["clone_prep"]
                     location_label = agent.current_place if agent.in_place else f"outside ({agent.position[0]}, {agent.position[1]})"
                     logger.info(
-                        f"Step {self.step}: [CLONE_START] {lumis_name(agent.id)} ({agent.lumis_type}) "
+                        f"Step {self.step}: [CLONE_START] {agent.display_name} ({agent.lumis_type}) "
                         f"begins clone prep at {location_label}. Will complete at step {self.step + prep}."
                     )
                     continue  # 同stepでsexualはしない
@@ -1705,7 +1930,7 @@ class Simulation:
                     agent.peak_life_introspection = agent.introspection[-1] if agent.introspection else ""
                     agent._life_peak_awaiting_narrative = False
                 logger.info(
-                    f"Step {self.step}: [LIFE_PEAK] {lumis_name(agent.id)} new whole-step peak "
+                    f"Step {self.step}: [LIFE_PEAK] {agent.display_name} new whole-step peak "
                     f"delta={life_delta:+.3f} (awaiting_narrative={agent._life_peak_awaiting_narrative})"
                 )
 
@@ -1714,7 +1939,7 @@ class Simulation:
         overall_status = self.get_place_status()
         self.stats['place_occupancy'].append(overall_status['occupancy_rate'])
         self.stats['agents_in_place'].append(agents_in_place)
-        self.stats['agents_outside_place'].append(self.num_agents - agents_in_place)
+        self.stats['agents_outside_place'].append(len(self.agents) - agents_in_place)
         
         # Record per-place statistics
         for place in self.places:

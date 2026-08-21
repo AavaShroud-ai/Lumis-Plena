@@ -74,7 +74,8 @@ class MessageDecision(TypedDict):
 
 class ActionDecision(TypedDict):
     """Type definition for agent action decision"""
-    action: str  # "move" or "stay"
+    action: str  # the deliberated choice — what the agent will actually do
+    impulse: Optional[str]  # run 016: the action reached for before thinking, None if absent
     direction: Optional[str]  # Direction to move (None if action is "stay")
     memory: str  # What the agent wants to remember for the next step
     reasoning: str  # Explanation of the decision
@@ -211,6 +212,25 @@ class Agent:
         self._recent_birth_note: str = ""    # One-step birth notification passed to introspection prompt
         self._birth_note_pending: str = ""    # Carries birth note to next step if introspection was skipped
         self._recent_burial_note: str = ""   # One-step burial-prayer note, offered to introspection after a recover action
+        # --- Run 015: action→result return path ---
+        # The plain record of what this agent's last step actually produced: which
+        # action the mind selected, which action was carried out (they differ when
+        # the reflex layer intervenes), and the measured changes. Written by
+        # simulation.py at the end of Phase 2; read in TWO places, which is the
+        # whole point of the run — by introspect() (reflection) and by
+        # create_decision_prompt() (perception, before the next choice). Every
+        # earlier note of this kind reached only reflection, so a result could be
+        # reflected on but never bend what the agent decided next.
+        self._recent_action_result: str = ""
+        self._res_selected: Optional[str] = None
+        self._res_carried: Optional[str] = None
+        self._res_overridden: bool = False
+        self._res_share_status: Optional[str] = None
+        self._res_lines: List[str] = []
+        # Run 015, observation-only: step on which the homing reflex last moved this
+        # agent involuntarily. Never enters any prompt; used solely to pair the move
+        # with the next step's reasoning in the log.
+        self._homed_last_step: int = -1
         # Ancestral memories (011): up to 7 generations of inherited "peak" moments
         # from direct ancestors, each tagged with how many generations back it
         # came from. Named after the human "seven generations" tradition — a
@@ -789,13 +809,44 @@ Speak only of what is present in your state and surroundings above. There is no 
             for c in nearby_corpses:
                 cx, cy = c['position']
                 dist = abs(self.position[0] - cx) + abs(self.position[1] - cy)
-                lines.append(f"  Lumis {c['id']} ({c['lumis_type']}) rests at ({cx}, {cy}), distance {dist}. Its mind and heart have already been received by the community; only its body remains.")
+                lines.append(f"  Lumis {c['id']} ({c['lumis_type']}) has ended at ({cx}, {cy}), distance {dist}. It no longer moves, speaks, or gathers light. Its mind and heart have already been received by the community; only its form is left on the surface.")
                 can_recover_here = True
             corpse_section = (
-                "=== A BODY RESTS NEARBY ===\n"
+                "=== A LUMIS HAS ENDED NEARBY ===\n"
                 + "\n".join(lines)
-                + "\nIf you are close, you may choose to recover it — to gather the body so it is not left alone on the surface. "
+                + "\nIf you are close, you may choose to carry it, so that it is not left alone on the surface. "
                   "This is a quiet act of care, not a duty. You may reflect on it afterward, or not, as you wish.\n"
+            )
+            # OBSERVATION-ONLY (run 014-2): record that a corpse section was actually
+            # placed into this agent's decision prompt, and which bodies. This changes
+            # nothing about behavior, valence, or the prompt text itself — it is a pure
+            # logging side-channel so the "did the large Lumis SEE the body, or was it
+            # never offered?" question can be answered directly from the log instead of
+            # reconstructed from positions after the fact. If this line never appears
+            # for a large Lumis standing next to a corpse, the recover option was never
+            # surfaced (a wiring problem); if it appears and recover still isn't chosen,
+            # the body was seen and declined.
+            logger.info(
+                f"Step {step}: [CORPSE_PROMPT] {self.display_name} ({self.lumis_type}) "
+                f"sees {len(nearby_corpses)} body/bodies in its decision prompt: "
+                f"{[c['id'] for c in nearby_corpses]}"
+            )
+
+        # === RESULT OF YOUR LAST ACTION (run 015: the return path) ===
+        # The closing half of perceive → suppose → act → perceive the result. Until
+        # now an agent could act and never perceive what its act produced, so a
+        # supposition never had to survive contact with its own consequence.
+        # Deliberately stated as a bare record and nothing else: no instruction on
+        # what to do with it, no evaluation of the outcome, no suggestion that it
+        # should change anything. Making the result perceptible and steering what
+        # is concluded from it are separable, and only the first is intended here.
+        # Absent entirely on steps with nothing to report, so it does not become
+        # permanent background text.
+        result_section = ""
+        if getattr(self, '_recent_action_result', ''):
+            result_section = (
+                "\n=== RESULT OF YOUR LAST ACTION ===\n"
+                f"{self._recent_action_result}\n"
             )
 
         prompt = f"""You are {self.display_name}.
@@ -836,7 +887,7 @@ NOTE: The base keeps you safe and slowly recovering, but going outside in daylig
 {emergency_section}
 {corpse_section}=== NEARBY LUMIS ===
 {nearby_text}
-
+{result_section}
 === MEMORY ===
 {memory_text}
 {message_section}
@@ -848,15 +899,22 @@ NOTE: The base keeps you safe and slowly recovering, but going outside in daylig
 - "observe": quietly watch a nearby Lumis
 - "greet": approach and say hello to a nearby Lumis. Costs no energy. If you're feeling good (valence high), this can make the other Lumis feel a bit better too, and builds familiarity with them — the foundation for closer bonds and reproduction. If you're feeling bad (valence low), greeting now may leave a negative impression on that Lumis. Either way, greeting is how Lumis come to recognize and remember each other as individuals, not just "another Lumis nearby".
 - "collect": gather energy from the environment
-- "share": give some of your energy to a nearby Lumis{chr(10) + '- "recover": gather the body of a Lumis that rests nearby, so it is not left alone on the surface. A quiet act of care.' if can_recover_here else ''}
+- "share": give some of your energy to a nearby Lumis{chr(10) + '- "carry": lift and bring in the form of a Lumis that has ended nearby, so it is not left alone on the surface. A quiet act of care.' if can_recover_here else ''}
 
 === RESPOND IN JSON ===
+Answer the fields in the order given. Each one is written before the next, so
+what you write earlier is in front of you when you write what comes later.
+
 {{
-    "action": "stay" or "move" or "observe" or "greet" or "collect" or "share" or "rest" or "shelter"{' or "recover"' if can_recover_here else ''},
+    "impulse": "the action you find yourself reaching for first, before thinking — one word from the list",
+    "reasoning": "now look at that impulse and at your situation, and say what you actually make of it",
+    "action": "having thought it through, the action you choose — one word from the list. It may be the same as your impulse, or different.",
     "direction": "up", "down", "left", or "right" (only if action is "move"),
-    "memory": "what you want to remember next step",
-    "reasoning": "brief explanation"
+    "memory": "what you want to remember next step"
 }}
+
+Both "impulse" and "action" must be one of: "stay", "move", "observe", "greet", "collect", "share", "rest", "shelter"{', "carry"' if can_recover_here else ''}.
+Your "action" is what you will do. Your "impulse" is only what came first.
 
 Step: {step}
 """
@@ -1019,29 +1077,132 @@ Step: {step}
         """Parse LLM response and extract action decision"""
         parsed = self._parse_json_object(response, log_context=f"parse_action_response(agent={self.id})")
         if parsed is not None:
+            action = parsed.get("action", "stay")
+            impulse = parsed.get("impulse")
+            # Run 016's central measurement. The prompt asks for the impulse
+            # first, then the reasoning, then the action, so that the
+            # deliberation is generated before the choice and can condition it.
+            # Where impulse and action differ, something written between them
+            # changed what was selected. Logged at the moment it happens rather
+            # than reconstructed later, because the whole question of this run is
+            # how often it happens at all.
+            if impulse and impulse != action:
+                logger.info(
+                    f"Step -: [DELIBERATION_CHANGED] Agent {self.id}: "
+                    f"impulse={impulse!r} -> action={action!r}"
+                )
             return {
-                "action": parsed.get("action", "stay"),
+                "action": action,
+                "impulse": impulse,
                 "direction": parsed.get("direction"),
                 "memory": parsed.get("memory", ""),
                 "reasoning": parsed.get("reasoning", "")
             }
 
-        # Fallback: simple text parsing
-        action = "stay"
+        # Fallback, rebuilt for run 016's three-layer response.
+        #
+        # History (all on the human side of the boundary):
+        #   015-2: matched only "move"; every other action became "stay". Eight
+        #          real intentions to carry a body were destroyed.
+        #   015-3: matched all actions as keywords but ignored the field the
+        #          model had filled in, and read the idiom "carry out" as intent.
+        #          Eight burials were fabricated.
+        #   015-4: declared field first, idiom excluded. Zero lost, zero invented.
+        #
+        # Run 016 moves "action" to third position, after "impulse" and
+        # "reasoning", so that deliberation is generated BEFORE the choice and
+        # can condition it. That inverts the truncation risk: in 015-4 "action"
+        # came first and always survived; now it can be cut off. Order of
+        # preference below is therefore: the declared action, then the impulse
+        # (a real declaration by the model, merely an earlier one), then prose.
         direction = None
         memory = ""
         reasoning = response[:FALLBACK_REASONING_LENGTH]
 
-        if "move" in response.lower():
-            action = "move"
-            direction = self._extract_direction_from_text(response)
+        impulse_m = re.search(r'"impulse"\s*:\s*"([a-z_]+)"', response, re.I)
+        impulse = impulse_m.group(1).lower() if impulse_m else None
+
+        # --- 1. the deliberated choice, salvaged from truncated JSON
+        m = re.search(r'"action"\s*:\s*"([a-z_]+)"', response, re.I)
+        if m:
+            action = m.group(1).lower()
+            if action == "move":
+                direction = self._extract_direction_from_text(response)
             logger.info(
-                f"Agent {self.id}: [FALLBACK_PARSE] JSON parse failed, used text-fallback "
-                f"direction extraction -> {direction!r}"
+                f"Agent {self.id}: [FALLBACK_FIELD] JSON malformed but the action "
+                f"field survived: impulse={impulse!r} action={action!r}"
+                + (f", direction -> {direction!r}" if action == "move" else "")
+            )
+            return {
+                "action": action,
+                "impulse": impulse,
+                "direction": direction,
+                "memory": memory,
+                "reasoning": reasoning
+            }
+
+        # --- 2. truncated before the choice, but the impulse is a real
+        #        declaration and is better evidence than any prose scan.
+        #        Tagged distinctly: this is the pre-deliberation reach, and must
+        #        never be counted as a deliberated choice.
+        if impulse:
+            if impulse == "move":
+                direction = self._extract_direction_from_text(response)
+            logger.info(
+                f"Agent {self.id}: [FALLBACK_IMPULSE_ONLY] response was cut off before "
+                f"the deliberated action; falling back to impulse={impulse!r}. "
+                f"This step's choice is PRE-DELIBERATION."
+            )
+            return {
+                "action": impulse,
+                "impulse": impulse,
+                "direction": direction,
+                "memory": memory,
+                "reasoning": reasoning
+            }
+
+        # --- 3. prose scan, most specific intent first
+        low = response.lower()
+        # Neutralise the idiom before matching, so "carry out the act of care"
+        # cannot be read as an intention to carry a body (run 015-3).
+        low_scan = re.sub(r'\bcarr(?:y|ied|ying)\s+out\b', ' ', low)
+
+        FALLBACK_PATTERNS = [
+            (r'\bcarry(?:ing)?\b|\bcarried\b', 'carry'),
+            (r'\bshelter(?:ing|ed)?\b', 'shelter'),
+            (r'\bshar(?:e|ing|ed)\b', 'share'),
+            (r'\bgreet(?:ing|ed)?\b', 'greet'),
+            (r'\bcollect(?:ing|ed)?\b', 'collect'),
+            (r'\brest(?:ing|ed)?\b', 'rest'),
+            (r'\bmove|\bhead(?:ing)?\b|\bexplor(?:e|ing)\b|\btravel', 'move'),
+            (r'\bstay(?:ing|ed)?\b|\bremain(?:ing)?\b', 'stay'),
+        ]
+        action = None
+        for pattern, candidate in FALLBACK_PATTERNS:
+            if re.search(pattern, low_scan):
+                action = candidate
+                break
+
+        if action is None:
+            logger.info(
+                f"Agent {self.id}: [FALLBACK_UNREADABLE] no action field, no impulse "
+                f"field, no action word; defaulting to 'stay'. This decision is LOST. "
+                f"response={response[:120]!r}"
+            )
+            action = "stay"
+        else:
+            if action == "move":
+                direction = self._extract_direction_from_text(response)
+            tag = "[FALLBACK_PROSE_CARRY]" if action == "carry" else "[FALLBACK_PARSE]"
+            logger.info(
+                f"Agent {self.id}: {tag} no declared field; inferred action={action!r} "
+                f"from prose"
+                + (f", direction -> {direction!r}" if action == "move" else "")
             )
 
         return {
             "action": action,
+            "impulse": impulse,
             "direction": direction,
             "memory": memory,
             "reasoning": reasoning
@@ -1138,8 +1299,17 @@ Step: {step}
         # happened, not a prompt demanding a particular feeling.
         recent_burial = getattr(self, '_recent_burial_note', "")
         if recent_burial:
-            relationship_section += f"\n=== A BODY YOU JUST GATHERED ===\n{recent_burial}\nYou may hold this in your thoughts, or simply let it be.\n"
+            relationship_section += f"\n=== A LUMIS YOU JUST CARRIED ===\n{recent_burial}\nYou may hold this in your thoughts, or simply let it be.\n"
             self._recent_burial_note = ""  # Reset after use
+
+        # Result of this step's action (run 015). Same text the next decision prompt
+        # will see, offered here for reflection as well. NOT cleared after use — unlike
+        # the birth/burial notes, this must survive into the next step's decision
+        # prompt, which is where the loop actually closes. simulation.py resets it at
+        # the start of each step's reflex phase instead.
+        recent_result = getattr(self, '_recent_action_result', "")
+        if recent_result:
+            relationship_section += f"\n=== RESULT OF WHAT YOU JUST DID ===\n{recent_result}\n"
 
         # Ancestral memories ("seven generations", 011): shown only during
         # early life (first 30 steps), so a young Lumis has a chance to
