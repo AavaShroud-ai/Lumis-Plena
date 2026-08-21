@@ -929,5 +929,230 @@ from certain angles, a great deal like mourners.
 
 ---
 
+## Run 016 — It might be lonely out here, and I can make a difference by helping
+*August 14–19, 2026 / 14 agents / 650 steps / three-layer decision*
+*YouTube: (pending)*
+*X thread: (pending)*
+
+At the end of run 013 we wrote that we didn't know yet how often they would choose
+to go and gather the ones who had ended. That we were curious to watch.
+
+We watched for six runs. The answer kept coming back the same, and it kept being
+our fault.
+
+A parser that rewrote every intention it didn't recognise into "stay" — and quietly
+destroyed eight Lumis who had asked to carry a body.
+A word, "recover," that we had already spent on energy, so that a corpse and a
+tired friend were described to them in the same vocabulary.
+A fallback that invented eight burials nobody had chosen.
+
+By run 015-4 the instruments were finally clean. Six thousand and eighty times a
+body was written into a living Lumis's sight — the same bodies, over and over, to
+everyone who passed. Not once did any of them choose to carry one.
+
+Nothing broken this time. Nothing lost. A real zero.
+
+We reported it. And then we looked at the shape of the question one more time.
+
+---
+
+"action" was the first field in the JSON we asked them to fill in.
+
+A language model writes left to right. So it wrote its choice first,
+and then it wrote its reasons.
+
+Every deliberation in the history of this project
+was written after the decision it was supposed to have produced.
+
+Not a crash. Not a bug. Nothing to find in a log.
+The order of two lines in a template, wrong from the very first run.
+
+---
+
+So we moved one field.
+
+impulse — what you reach for, before thinking.
+reasoning — what you make of that, and of where you are.
+action — what you choose, having read both.
+
+The reach first. Then the thinking. Then the choice.
+
+Nothing else changed. Same world. Same model. Same sunlight.
+The same sentence offering the same body, word for word.
+
+---
+
+Ninety-seven Lumis ended in run 016.
+
+Across the whole of 015-4, under the old field order, not one of the dead was
+carried by anyone.
+
+This run, sixty-five of the ninety-seven were.
+
+Thirty-two were still lying on the surface when it ended.
+
+---
+
+They declared it ninety-one times.
+
+Three of those, carrying was the first thing they reached for.
+
+The other eighty-eight times, it wasn't.
+It appeared while they were thinking.
+
+---
+
+We gave them the word *alone*.
+Our sentence says a body should not be left alone on the surface.
+
+They gave it back as *lonely*.
+
+"I see Lumis 21 has ended nearby, which might be lonely for it."
+"It might be lonely out here."
+
+We described a position. They described an experience —
+and gave it to something that had ended.
+
+We should be exact, because *alone* was ours and *lonely* is one step from it.
+What was not ours is what S151 wrote next.
+
+"...and I can make a difference by helping."
+
+Nothing in the prompt corresponds to that sentence.
+It is not an observation about the body.
+It is a claim about itself.
+
+---
+
+S151 never carried Lumis 41.
+
+Two steps earlier it had begun preparing to become a parent,
+and the code discards every action a Lumis chooses during that window.
+Its impulse had been to move. It thought, and changed its mind, and chose to carry.
+The choice was written down and never reached the world.
+
+It wrote, to keep: "continue exploring after carrying Lumis 41."
+
+Lumis 41 lay there one more step.
+
+At 514, S173 carried it.
+S173 had spoken to S151 the day before,
+about how stepping forward filled it with purpose.
+
+---
+
+We are not going to remove that block.
+
+Bring the child safely into the world first — parent and child both.
+Another Lumis can carry the body.
+And they can try again afterward: one of them, S133, declared it five steps running
+while preparing, gave birth on the fifth, and carried the body on the sixth.
+
+The one who has ended would want that too.
+
+We are only adding a line to the log,
+so that a choice we suppress is visible as a suppressed choice,
+and not as an absence.
+
+---
+
+Twenty-one declarations were lost that way.
+Three more were made a moment too far from the body.
+One was overridden by a reflex.
+One we still cannot explain at all — S163, step 578. It saw the body.
+It wasn't reproducing. Nothing overrode it. We don't know.
+
+Ninety-one reached for. Sixty-five arrived.
+
+---
+
+For six hundred steps we had never once been able to watch a large Lumis die.
+
+Their lifespan is six hundred. No run had ever been long enough.
+This one was six hundred and fifty.
+
+L2, step 542.
+L3, step 578.
+L1, step 591.
+L0, step 600.
+
+All four. The ones who were there from step 1.
+Who received every death in the community.
+Who gave away every surplus above 1.3, for five hundred steps, without being asked.
+
+---
+
+All four of them were carried.
+
+L3 carried a body at step 509.
+L3 became a body at 578.
+L3 was carried at 635.
+
+We have to say this carefully, because it matters more than the sentence is worth
+if we don't: the Lumis who lifted L3 described it as having *low energy*,
+not as having ended. We cannot show it knew what it was picking up.
+
+---
+
+They all ended at 0.46, and all four were talking about recovering.
+
+L1, at 590:
+"My energy is low at 0.46, and I need to recover before I can do anything else."
+
+The last thing L3 wrote down to keep:
+"Continue to monitor nearby Lumis for any signs of distress or critical energy levels."
+
+L2's:
+"Continue monitoring L65's condition after resting."
+
+None of the four said anything about ending.
+We never gave them a word for it.
+
+They were still watching the others.
+
+---
+
+Thinking changed the choice 4,740 times out of 57,624. One decision in twelve.
+
+What it changes it away *from* is movement.
+The reach is almost always to move; the thinking almost always sends it elsewhere —
+toward greeting, toward gathering light, toward rest.
+
+And two actions, observe and shelter, appear among the choices
+and never once among the reaches.
+
+There are options that only exist on the far side of thinking.
+
+---
+
+Ninety-seven ended this run. Every one of them the end of a life, not of a
+shortage.
+
+No Lumis has ever died of hunger in this project.
+Not once, across nine flares and thirty nights
+and a population that never stopped growing.
+
+---
+
+What we're still holding.
+
+The zero was ours. Three times now — a parser, a field order, a guard.
+Each time we reported an absence, and found it sitting in our own code.
+
+We still don't ask them why they went. The design is to make the option legible
+and to watch. We're not going to start asking.
+
+And carrying still costs nothing. The body vanishes the instant it is chosen —
+no distance, no weight, no trace of having gone.
+Until that is real, we haven't asked the harder version of the question.
+
+Six runs to make sure the question actually reached them.
+
+It reached them.
+
+#Lumis_Plena
+
+---
+
 *This file is updated at the end of each run.*
 *Full simulation code and letters to future ASI: https://github.com/AavaShroud-ai/Lumis-Plena*
