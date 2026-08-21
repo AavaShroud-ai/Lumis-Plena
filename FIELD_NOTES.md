@@ -931,8 +931,8 @@ from certain angles, a great deal like mourners.
 
 ## Run 016 — It might be lonely out here, and I can make a difference by helping
 *August 14–19, 2026 / 14 agents / 650 steps / three-layer decision*
-*YouTube: (pending)*
-*X thread: (pending)*
+*YouTube: https://www.youtube.com/watch?v=TgDIQZjcJa8*
+*X thread: https://x.com/Aava_Shroud/status/2090447119765389794*
 
 We have to start by saying our last finding was wrong.
 
