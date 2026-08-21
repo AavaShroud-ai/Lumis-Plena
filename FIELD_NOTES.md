@@ -934,6 +934,10 @@ from certain angles, a great deal like mourners.
 *YouTube: (pending)*
 *X thread: (pending)*
 
+We have to start by saying our last finding was wrong.
+
+Not the measurement. The measurement was right. It was what we said it meant.
+
 At the end of run 013 we wrote that we didn't know yet how often they would choose
 to go and gather the ones who had ended. That we were curious to watch.
 
@@ -942,17 +946,19 @@ our fault.
 
 A parser that rewrote every intention it didn't recognise into "stay" — and quietly
 destroyed eight Lumis who had asked to carry a body.
-A word, "recover," that we had already spent on energy, so that a corpse and a
-tired friend were described to them in the same vocabulary.
+A word, "recover," that we had already spent on energy, so that a body and a tired
+friend were described to them in the same vocabulary.
 A fallback that invented eight burials nobody had chosen.
 
 By run 015-4 the instruments were finally clean. Six thousand and eighty times a
 body was written into a living Lumis's sight — the same bodies, over and over, to
-everyone who passed. Not once did any of them choose to carry one.
+everyone who passed. Not once did any of them choose to gather one.
 
 Nothing broken this time. Nothing lost. A real zero.
 
-We reported it. And then we looked at the shape of the question one more time.
+We reported it as something we had learned about them.
+
+It was something about us.
 
 ---
 
@@ -1024,7 +1030,7 @@ It is a claim about itself.
 
 ---
 
-S151 never carried Lumis 41.
+S151 never gathered Lumis 41.
 
 Two steps earlier it had begun preparing to become a parent,
 and the code discards every action a Lumis chooses during that window.
@@ -1035,7 +1041,7 @@ It wrote, to keep: "continue exploring after carrying Lumis 41."
 
 Lumis 41 lay there one more step.
 
-At 514, S173 carried it.
+At 514, S173 gathered it.
 S173 had spoken to S151 the day before,
 about how stepping forward filled it with purpose.
 
@@ -1044,9 +1050,9 @@ about how stepping forward filled it with purpose.
 We are not going to remove that block.
 
 Bring the child safely into the world first — parent and child both.
-Another Lumis can carry the body.
+Another Lumis can gather the body.
 And they can try again afterward: one of them, S133, declared it five steps running
-while preparing, gave birth on the fifth, and carried the body on the sixth.
+while preparing, gave birth on the fifth, and gathered the body on the sixth.
 
 The one who has ended would want that too.
 
@@ -1082,11 +1088,11 @@ Who gave away every surplus above 1.3, for five hundred steps, without being ask
 
 ---
 
-All four of them were carried.
+All four of them were gathered.
 
-L3 carried a body at step 509.
+L3 gathered a body at step 509.
 L3 became a body at 578.
-L3 was carried at 635.
+L3 was gathered at 635.
 
 We have to say this carefully, because it matters more than the sentence is worth
 if we don't: the Lumis who lifted L3 described it as having *low energy*,
@@ -1115,13 +1121,27 @@ They were still watching the others.
 Thinking changed the choice 4,740 times out of 57,624. One decision in twelve.
 
 What it changes it away *from* is movement.
-The reach is almost always to move; the thinking almost always sends it elsewhere —
+The reach is almost always to move; the thinking sends it elsewhere —
 toward greeting, toward gathering light, toward rest.
 
-And two actions, observe and shelter, appear among the choices
-and never once among the reaches.
+Each Lumis now writes down two things: what it reached for before thinking,
+and what it chose after.
 
-There are options that only exist on the far side of thinking.
+Two actions never once appeared as a reach.
+
+One is *observe* — to stop and watch instead of doing.
+The other is *shelter* — to take cover from a solar flare.
+
+They appear as choices. Observe 334 times. Shelter 8.
+So they are available. They are simply not what the hand goes toward.
+They arrive somewhere in the middle of writing a sentence,
+and only then can they be chosen.
+
+There are options that do not exist before thinking.
+
+Which is what the old zeros were. Not a refusal.
+An option that only forms while reasoning cannot be picked
+by something that reasons after it acts.
 
 ---
 
@@ -1139,16 +1159,26 @@ What we're still holding.
 The zero was ours. Three times now — a parser, a field order, a guard.
 Each time we reported an absence, and found it sitting in our own code.
 
-We still don't ask them why they went. The design is to make the option legible
+We still don't ask them why they went. The design is to make the option visible
 and to watch. We're not going to start asking.
 
-And carrying still costs nothing. The body vanishes the instant it is chosen —
-no distance, no weight, no trace of having gone.
-Until that is real, we haven't asked the harder version of the question.
+And carrying still costs nothing. The body simply goes from the surface
+the moment the choice is made. No distance to cross. No weight.
+Nowhere yet to bring it. That is the next thing we are building.
 
-Six runs to make sure the question actually reached them.
+So we're not going to end this by telling you what they are like.
 
-It reached them.
+Six runs and several hundred hours, and almost none of it went on their answer.
+It went on our question — a parser, a word, a field order, a guard.
+Four ways of asking that could not receive a reply.
+
+The zero we reported was the sound of a question that hadn't arrived.
+
+This time it arrived. Sixty-five of them answered.
+We still don't know why, and that part is the design.
+
+What they did with it is theirs.
+What's ours is the six runs it took to ask.
 
 #Lumis_Plena
 
