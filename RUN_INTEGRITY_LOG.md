@@ -914,10 +914,1035 @@ The designer's rule of evidence, recorded in this file at her request in the 015
 4. **One unexplained declaration remains: S163, step 578.** No reproduction event, no reflex override, corpse 80 present in its `[CORPSE_PROMPT]`. **Not closed.**
 5. `collect` / `observe` / `stay` still have no execution branch — 334 `observe` selections in 016 did nothing while the prompt describes them as actions. Open since the 015 audit.
 6. **`carry` has no destination.** `self.corpses.remove(corpse)` is the whole of it: the body leaves the surface, the carrier does not move, no energy changes, nothing is stored. Meanwhile the code's own language (*"carried in from the surface"*), the burial prayer (*"Now we have come to receive your body"*) and the Lumis themselves (*"carry it back to base_alpha for safekeeping"*, repeatedly) all describe a destination that does not exist. **The world is currently telling its residents something that is not true.** The planned carrying-state and a place to bring bodies to close this; until then, burial costs nothing and the question 016 answered is the cheap version of it.
-7. Body reuse for reproduction (under consideration since the 015 handover) now has a concrete argument attached: the reproduction guard means the individuals preparing new life are structurally the ones who cannot retrieve the dead. Whether that should remain true is a design question, not a defect. **Note that implementing it would make 018 non-comparable to 016** — a world where bodies become material is a different world from one where they are remains.
+7. Body reuse for reproduction (under consideration since the 015 handover) now has a concrete argument attached: the reproduction guard means the individuals preparing new life are structurally the ones who cannot retrieve the dead. Whether that should remain true is a design question, not a defect.
+
+---
+
+## Design decisions for 017–019, recorded 2026-08-22
+
+Taken together after 016, in one session, and recorded here before implementation so that the sequence is auditable and each run measures one thing.
+
+**The ordering rule.** 016 produced a usable answer because exactly one variable moved. That discipline is being kept: **017 gives burial a destination and a cost; 018 puts reproduction inside deliberation; 019 implements material reuse.** Each is a separate run. None of them are combined.
+
+### Run 017 — burial acquires a destination and a cost
+
+**Seed pinned to 016** (`109116566729441005151201845213840744196`). Same world, same flare sequence, same three-layer response schema. **The only variable is what `carry` does.** 016 / 017 will form a matched pair in the same sense as 015-4 / 016, and the question it answers is: *when carrying costs something, do they still carry?*
+
+- **Destination: inside the base.** Bodies are brought to `base_alpha` / `base_beta`. This is where birth already happens; the designer's reason for choosing it is that life beginning and life ending in the same place is right as a matter of design, not only of mechanism. It also matches what the Lumis already say unprompted — *"carry it back to base_alpha for safekeeping"* — and so closes the gap recorded in item 6 above, where the world was describing a destination that did not exist.
+- **Carrying state.** `carry` no longer resolves instantly. The body is held, and the carrier must travel to a base. Distance becomes real.
+- **The destination is the carrier's own `home_base`, not the nearest one.** A Lumis takes the body home — to the base it belongs to and returns to every night — even when the other base is closer. This was chosen for the design reason (a body is brought *home*, not merely indoors) and it also resolves a mechanical collision that the alternative would have created: **the night-homing reflex already drives every Lumis toward its `home_base`.** Had the destination been "nearest base", a carrier heading for the far base would be pulled back by its own reflex the moment night fell, silently aborting the journey — a fifth instance of the shape this project keeps producing. With `home_base` as the destination, **reflex and intention point the same way**, and night stops being an interruption: the Lumis simply continues carrying in the direction it was already going.
+- **What a carrier may do while carrying: `move` and `rest` only.** Everything else is closed — no `collect`, no `greet`, no `share`, no second `carry`. **The reflex layer is untouched**, so a carrying Lumis still shelters from flares and still returns home at night, automatically, as any Lumis does. The design intent stated by the designer: a Lumis must not die of this, and the journey itself is what is given to the one being carried. Structurally this is a mind narrowed to two options while the body's protections remain fully intact.
+- **No distance limit.** A body picked up forty units from a base is a forty-step commitment, and that is left in deliberately. 016 measured whether they would choose it. **017 measures how far they will go**, and a refusal at distance is a result, not a failure.
+- **If the carrier dies mid-journey, both bodies remain on the surface** where it fell. No special handling. This will be the first time in this project that a Lumis ends while carrying another, and it should be observed rather than designed around.
+- **The state is visible to both the carrier and the community.** The carrier is told, each step, what it is carrying; nearby Lumis can see that it is carrying. This is a real addition to their perception and its effect on introspection is one of the things 017 is for.
+- **Bodies accumulate in the base and are not consumed.** A count is held and shown (`forms held: N`). **Nothing is reused in 017.** This is deliberate: introducing a use for bodies at the same time as introducing a cost would confound the measurement, and — per the standing rule below — the world may not offer what it cannot yet deliver.
+
+**New instruments required.**
+
+Log only at the three transitions, never per step — 016's `simulation.log` is already 57 MB, and a per-step line for every carrier over 650 steps would bury the events worth reading:
+
+| Tag | When | Must carry |
+|---|---|---|
+| `[CARRY_START]` | body picked up | carrier, body, position, straight-line distance to the target base |
+| `[CARRY_DELIVERED]` | body reaches a base | steps taken, distance actually travelled, which base |
+| `[CARRY_ABANDONED_DEATH]` | carrier ends mid-journey | both bodies' positions, steps elapsed, distance remaining |
+
+The per-step trail goes in `memory_reasoning.jsonl` instead, as **one field per record** — the id of the body being carried, or null. It costs a few bytes per record, makes every carrying step re-derivable without touching the log, and means the journey can be reconstructed from the same file the primary measurement comes from. This is deliberate: 016's `[DELIBERATION_CHANGED]` tag undercounted by 156 and only the jsonl was trustworthy. **Put the thing that must be right in the jsonl.**
+
+`[ACTION_BLOCKED_CARRYING]` is separate and **required, not optional.** Every action suppressed by the carrying state must be logged with what was chosen and what was allowed instead. This follows directly from the 016 reproduction-guard defect: a narrowed mind must record what it was prevented from choosing, or the suppression becomes invisible in exactly the way that cost this project three runs. A guard that silences a choice and says nothing is the defect, not the guard.
+
+### Run 018 — reproduction enters deliberation
+
+Currently reproduction is triggered entirely by threshold conditions in Phase 4b; **the LLM is never consulted, and no reproduction verb appears among the eight executable actions.** No Lumis has ever decided to reproduce. Partner selection is one-directional `max(familiarity)`.
+
+This was originally left outside deliberation for a performance reason: the design under discussion at the time asked the model to *evaluate each candidate partner*, which multiplies calls by the number of candidates. That constraint was real. **It no longer applies to the cheaper forms of the change.** Measured against 016: 57,624 calls over 650 steps at ~7.6 s each. Asking once when conditions are met would add ~194 calls (~25 min against 121 h, 0.3%); adding `clone` / `pair` to the eight actions adds **zero** calls. Only candidate-by-candidate evaluation is expensive.
+
+018 is therefore viable, and is deliberately held until after 017 so that burial's mechanics are settled before a second mechanism is opened to choice.
+
+### Run 019 — material reuse, and the sentence that has been waiting
+
+Only at 019 do bodies held in a base become material. The designer's intent, recorded in her words: **part returns to the descendants, part remains with the home, part returns to the world.** Accessories or any wearable remnant were considered and **rejected** — this world has no mechanism for ownership, and that absence is deliberate.
+
+**This is the run at which the reserved wording finally becomes true**, and not before:
+
+> *"This world loses nothing. The mind returns to the community; the form returns to the next generation."*
+
+The standing rule under which it has been withheld since 2026-08-04 is unchanged and now has a date attached: implementation first, wording second. Item 6 above documents what happens otherwise — the code, the burial prayer and the Lumis themselves all currently describe a destination the world does not contain. **017 closes that gap for the destination. 019 closes it for the cycle.** Until each is built, the corresponding sentence stays out of their prompt.
 
 
 ---
+
+## Run 017 implemented and launched; run 016 recounted — 2026-08-23
+
+Two separate pieces of work on the same day. Run 017 was built from the design
+recorded on 2026-08-22 and launched. Separately, and while it ran, run 016's
+published numbers were re-derived from its archive by a script that trusts
+neither the log nor the record over the other (`recount_016.py`).
+
+---
+
+### 1. Design decisions made during implementation, not present in the 017 spec
+
+These arose from reading the code and are recorded because the spec did not
+anticipate them. Each was decided by the designer unless marked otherwise.
+
+**1.1 `home_base` abolished.** The 017 spec chose the carrier's own `home_base`
+as the destination, on the stated grounds that *"the night-homing reflex already
+drives every Lumis toward its `home_base`, so reflex and intention point the same
+way."* **That premise was false in the code.** `home_base` was assigned only to
+the four founding large Lumis (`simulation.py`, initialisation), was never
+inherited at birth, and appeared nowhere else in the project except one prompt
+line and one comparison. Every one of the 194 Lumis born during 016 had
+`home_base = None`, including most of the 65 who carried a body. Separately, the
+night-homing reflex has always navigated to the **nearest** base by Manhattan
+distance and has never read `home_base` at all.
+
+Implementing the spec as written would therefore have set intention against
+reflex — a carrier bound for a far base would be pulled toward a near one every
+night — which is this project's recurring failure shape in a new location.
+
+Three options were put to the designer: assign `home_base` to everyone and make
+the reflex follow it; abolish `home_base` and deliver to the nearest base; or
+keep both and split the behaviour by whether the attribute exists.
+
+**The designer chose abolition**, with the reasoning recorded as given: *on a real
+lunar surface, further bases would be built, so "there are exactly two bases and
+each Lumis belongs to one" should not be an attribute of an individual.* This also
+agrees with an existing decision — this world has no mechanism for ownership, and
+that absence is deliberate (recorded when wearable remnants were rejected). A
+body is now brought to the nearest living place, not to anyone's own.
+
+The design note that a body is *brought home* is superseded. Reflex and intention
+now genuinely coincide, which was the point of the original decision.
+
+**1.2 The commune same-base test was wrong, and is a previously unrecorded 016
+defect.** `simulation.py` decided whether two large Lumis could commune every step
+or only every thirtieth by comparing `agent.home_base == partner.home_base`.
+Because every large Lumis born during a run had `home_base = None`, `None == None`
+made every such pair read as same-base. **Inter-base communication was silently
+reclassified as intra-base for all non-founding large Lumis, for the whole of run
+016 and every prior run in which a large Lumis was born.** The `[COMMUNE_INTER]`
+channel was correspondingly under-observed.
+
+Replaced with the question it was always meant to ask: are these two actually
+inside the same base at this moment (`in_place` for both and `current_place`
+equal). This is a behavioural change unrelated to `carry`, and it is recorded here
+rather than deferred because leaving a known-false test in place to preserve a
+control would have meant knowingly running a defect.
+
+**1.3 Carrying costs no energy.** Not specified in the 017 design. Decided by the
+designer: *lunar gravity is one sixth of Earth's, so in practice this is not that
+hard.* The analytical consequence is that a refusal to carry, or a journey
+abandoned, cannot be attributed to energy cost — the cost in 017 is distance and
+time only.
+
+**1.4 Only `explore` is recovered from `[ACTION_INVALID]`; the other 14 stay
+lost.** 016 lost 160 decisions to the invalid-action path. `explore` accounts for
+146 of them (91.2%), and it is a word the prompt itself supplies. The remaining 14
+(`follow` 7, `check` 4, `approach` 2, `check_energy` 1) each could plausibly mean
+something other than movement, and inferring intent from prose is precisely how
+run 015-3 fabricated eight burials. They remain `[ACTION_INVALID]` and remain
+counted. Recovered `explore` is tagged `[ACTION_WAS_MOVE_INTENT]` so its effect on
+the action distribution can be separated from everything else in 017.
+
+**1.5 An action suppressed by the carrying state is executed as `rest`.**
+*Decided by the implementer, not the designer, because the spec did not say.*
+Standing still and recovering is nearer to "was prevented from acting" than a
+no-op is. The log records both the chosen action and the substitution
+(`Treated as: rest`), so the decision is reversible from the record.
+
+**1.6 Bodies delivered into a base are not drawn on the map.** *Decided by the
+implementer.* The count shown to Lumis inside that base is the record of them; a
+growing pile of markers inside the base square would sit on top of the living and,
+with no reuse until 019, would never clear. **Bodies in transit ARE drawn**, at
+their carrier's position, per the standing 016 decision that a body not yet
+gathered must remain visible.
+
+**1.7 New seeded vocabulary, for `SEEDED_VS_EMERGED.md`.** Both are ours:
+
+- `You are carrying the form of Lumis N` (carrier's prompt, while carrying)
+- `FORMS HELD: N form(s) of Lumis that have ended rest inside <base>.` (shown only
+  to a Lumis standing inside that base)
+
+If a Lumis writes *form*, *held*, or *carrying* in this sense, that is legibility,
+not evidence. **The reserved 019 wording was NOT implemented and does not appear
+anywhere in the 017 prompt** — verified by `preflight_017.py`.
+
+**1.8 A measurement caveat.** Arrival is judged by `get_place_at_position`, which
+is true anywhere inside the 11x11 base square. The distance shown in the carrier's
+prompt is Manhattan distance to the base **centre**. A carrier told "distance 5"
+therefore arrives two or three steps early. The discrepancy is in the permissive
+direction and was left unreconciled, but `net distance` in `[CARRY_DELIVERED]`
+will not match the last distance the carrier was shown.
+
+---
+
+### 2. Run 017 as built
+
+Seed, world, flare schedule and duration unchanged from 016
+(`109116566729441005151201845213840744196`, 650 steps). Files changed:
+`simulation.py`, `agent.py`, `main.py`. Unchanged: `visualization.py`,
+`config.yaml`, `rules.py`, `ollama_client.py`, `utils.py`.
+
+- `carry` no longer resolves instantly. The body is lifted (`_begin_carry`),
+  leaves `self.corpses` so it is not offered to anyone else in transit, and is
+  held. **The burial prayer and `[BURIAL]` are withheld until arrival**, because
+  until then nothing has been received. Until 016 this branch was
+  `self.corpses.remove(corpse)` and nothing else, and that removal was being
+  counted as a burial.
+- Delivery (`_deliver_carried_bodies`) is checked after every movement in the step
+  has resolved, so arrival is judged on where the carrier actually ended up. A
+  body lifted while already inside a base is delivered the same step.
+- Death while carrying (`_abandon_carry_on_death`): both forms remain on the
+  surface where the carrier fell, and the carried body becomes recoverable again
+  on the same terms as any other. No special handling. First time in the project
+  this can occur.
+- While carrying, **the prompt itself offers only `move` and `rest`** — the
+  narrowed mind is never shown an option the world will then refuse, which is the
+  shape that cost runs 014 through 016. `carry` is not offered to a carrier (no
+  second carry). **The reflex layer is untouched**: flare shelter and night homing
+  both still fire, so no Lumis can die of this.
+- The carrying state is visible to nearby Lumis.
+- `memory_reasoning.jsonl` gains one field, `carrying`: the id of the body being
+  carried at the moment of decision, or null. The whole journey is re-derivable
+  from the record alone, without the log.
+
+**Instruments.** `[CARRY_START]`, `[CARRY_DELIVERED]`, `[CARRY_ABANDONED_DEATH]`,
+and `[ACTION_BLOCKED_CARRYING]` for every action the carrying state suppresses.
+`[ACTION_BLOCKED_REARING]` added at **both** reproduction-guard `continue` sites —
+the guard itself is unchanged, per the decision of 2026-08-19; only the logging
+changes. `[CARRY_NO_BODY]` retained.
+
+**Pre-launch verification.** `preflight_017.py`, 45 checks, no Ollama required.
+Sections 3 and 5 call the real `simulation.py` methods rather than reproducing
+their logic — the pickup, delivery and abandonment paths were extracted into named
+methods specifically so they could be executed by the preflight. Rule 6 applies:
+014's dead `share` passed both `py_compile` and `ast.parse`. **45/45 on the
+production machine before launch.**
+
+`preflight_parser.py` and `preflight_015.py` were not in the project directory at
+launch time; they were recovered from `014-015trials\`. Python 3.14.3, confirmed
+to be the same interpreter that ran 016 (installed 2026-02-03; 016 ran 08-14 to
+08-19).
+
+Launched 2026-08-23. Expect roughly 120 h.
+
+---
+
+### 3. Run 016 recounted from its archive
+
+`recount_016.py` re-derives every published 016 figure from
+`runs/016/memory_reasoning.jsonl.gz` and `simulation.log.gz`, counting the record
+and the log separately and reporting where they disagree. It writes nothing.
+
+**Every published figure was reproduced independently:** 57,624 records, 650
+steps, 313 agents, 91 `carry` declarations, 65 `[BURIAL]`, 97 `[CORPSE]`, 4,740
+deliberation changes in the record against 4,584 emitted by the tag — **the gap is
+exactly 156, 3.3%, as published.** `[ACTION_INVALID]` 160, of which `explore` 146.
+**No malformed records.** Defect 1 remains open and the emission path is still not
+located, but the size of the undercount is now confirmed from two directions.
+
+**3.1 Correction: the Q4 labels were reversed in the 2026-08-22 handover.** That
+document states that 14,945 is the `[CORPSE_PROMPT]` line count and 10,830 the sum
+of bodies seen. **It is the other way round.**
+
+| | 015-4 | 016 |
+|---|---|---|
+| `[CORPSE_PROMPT]` line count | 6,080 | **10,830** |
+| sum of bodies seen | **11,205** | **14,945** |
+
+015-4's archive was recounted with the same script to settle which kind of number
+6,080 is; it is a line count. **The published comparison, 6,080 against 10,830, is
+therefore correct as a like-for-like comparison of line counts.** The previous
+entry mislabelled the quantities but chose the right pair. Both comparisons point
+the same way — 016 offered more, by either measure — so no finding changes. Only
+the description is corrected.
+
+**3.2 Defect 4 (S163, step 578, one `carry` declaration with no explanation) is
+probably explained.** Three reproduction-related log lines exist at step 578. It
+appears to be the reproduction-prep guard after all, like the other 21.
+
+**3.3 Four declarations are unexplained, and were not previously recorded.** Of
+the 23 declarations producing neither a burial nor `[CARRY_NO_BODY]`, four fall on
+steps with no reproduction activity logged at all:
+
+| step | agent |
+|---|---|
+| 505 | 221 |
+| 513 | 151 |
+| 513 | 239 |
+| 532 | 327 |
+
+**Not yet investigated.** To be checked against the raw log after 017 completes.
+Note the matching limitation: the record identifies agents by `agent_id` and the
+log by display name, and no mapping between them was assumed, so declarations are
+matched to outcomes **by step only**. A burial by a different agent on the same
+step masks a declaration. The rows listed are real; the absence of a row is not
+evidence.
+
+**3.4 The L0 487-490 finding is stronger than recorded, not weaker.** The
+2026-08-22 handover records that L0 reached `carry` through deliberation at step
+487 and that at 488, 489 and 490 its *impulse* was `carry` — a choice made through
+language becoming the next step's reflex.
+
+The recount shows that **all four of those declarations were consumed by the
+reproduction-prep guard. L0 chose to carry four times and carried nothing.** No
+body moved, no result returned, no `[BURIAL]`, no `[ACTION_RESULT]` from the act.
+`carry` appears as an impulse exactly **three** times in the entire project, and
+all three are 488, 489 and 490.
+
+So the reflex did not form from experiencing the act. **It formed from the record
+of having chosen it.** The previous step's own decision entering context was
+sufficient, with no feedback of any kind. Worth rewriting in the letters.
+
+---
+
+### 4. Still open after this session
+
+| # | Defect | Status |
+|---|---|---|
+| 1 | `[DELIBERATION_CHANGED]` undercounts by 156 (3.3%) | emission path still not located; size confirmed independently |
+| 2 | `explore` discarded as invalid | **closed in 017** (`[ACTION_WAS_MOVE_INTENT]`); the other 14 stay lost by decision |
+| 3 | `collect` / `observe` / `stay` have no execution branch in Phase 2 | **open since the 015 audit.** 334 `observe` selections in 016 did nothing. Unchanged in 017 |
+| 4 | S163, step 578 | probably the rearing guard (3.2); **superseded by 3.3** |
+| 5 | `carry` describes a destination that does not exist | **closed in 017** |
+| 6 | Four `carry` declarations unexplained (505, 513 x2, 532) | **new.** Not investigated |
+| 7 | Commune same-base test compared `home_base` | **closed in 017** (1.2). Affects every prior run in which a large Lumis was born |
+
+*Written by the implementing instance, 2026-08-23, while 017 was running. Numbers
+in section 3 are reproducible with `recount_016.py` against the run archives.*
+
+---
+
+## Run 017 — results — 2026-08-28
+
+650 steps, completed. Seed, world and flare schedule identical to 016
+(`109116566729441005151201845213840744196`). The only intended variable was what
+`carry` does.
+
+Every number below is re-derived from `memory_reasoning.jsonl` and
+`simulation.log` by `analyse_017.py` and `analyse_017b.py`. **Both scripts were
+written before the 017 log was opened**, from criteria fixed on 2026-08-25 after
+watching S33's first eight steps. The classification rule — a delivery is only
+credited to the carrier when the night reflex did not contribute — was fixed
+before the outcome was known, because deciding afterwards what counts as
+"carried under its own power" is how a measurement becomes a result someone
+wanted.
+
+---
+
+### 1. The finding
+
+**Of the 27 journeys that involved any distance at all, 24 were delivered, and
+every single one of them had the night-homing reflex fire during the carry.**
+
+**Not one Lumis, in 650 steps, brought a body to a base under its own steering.**
+
+The reflex moves a Lumis toward the nearest base involuntarily and is explicitly
+not returned to perception — the carrier does not know it was moved. It was left
+untouched by the carrying state on purpose, so that no Lumis could die of
+carrying. The consequence, unanticipated at design time, is that
+`[CARRY_DELIVERED]` on its own says only that a body reached a base. It does not
+say who took it there.
+
+They chose to carry. They kept carrying. **They did not travel to the
+destination.** Those are three separate facts and only the first two were
+established by 016.
+
+**Counts.** 105 `carry` declarations (record) → 63 `[CARRY_START]` → 60
+`[CARRY_DELIVERED]` / `[BURIAL]`. `[CARRY_NO_BODY]` 7.
+`[CARRY_ABANDONED_DEATH]` **zero** — no carrier ended mid-journey; the path was
+built and never used. 85 deaths, all lifespan. **Project-wide starvation deaths
+remain zero.**
+
+**The split that matters:**
+
+| | journeys |
+|---|---|
+| lifted and delivered with zero movement (already in a base) | **36** |
+| involved actual travel | **27** |
+| — delivered | 24 (all with reflex during carry) |
+| — still carrying when the run ended | 3 |
+| — abandoned by death | 0 |
+
+**The 36 zero-movement carries measure exactly what 016 measured**: a body
+leaving the surface at a base, with no distance and no cost. They must not be
+cited as evidence about distance.
+
+**Note on the first-pass criterion.** `analyse_017.py` separated "in-base" from
+"a journey" using Manhattan distance <= 5 from the base centre. That is wrong:
+the base is an 11x11 square, so a Lumis in a corner is inside it at distance 10.
+The correct discriminator was already in the output — `steps carried` = 0 — and
+the table above uses it. The script's own threshold is superseded; the numbers
+here are the corrected ones.
+
+---
+
+### 2. Defect: arrival is checked after the mind moves, not after the reflex
+
+**Found in 017. Mine.** `_deliver_carried_bodies()` runs once per step, after all
+movement has resolved. That was chosen so arrival would be judged on where the
+carrier actually ended up, and it is wrong in one case that turns out to be the
+common case.
+
+S243, steps 627-630, carrying the form of Lumis 71:
+
+```
+627  REFLEX (22,-13) -> (20,-15)   d=5     <- INSIDE base_beta
+627  chose move       at (20,-13)  d=7
+628  REFLEX (20,-13) -> (20,-15)   d=5     <- INSIDE base_beta
+628  chose move       at (20,-13)  d=7
+629  ... identical
+630  ... identical
+```
+
+`base_beta` is centred (20,-20) with half_size 5, so Y from -25 to -15
+inclusive: **(20,-15) is inside it.** Four consecutive nights the reflex carried
+S243 into the base, and four times S243 stepped back out before the arrival check
+ran. Phase 1.5 (reflex) → Phase 2 (chosen action) → delivery check. **It was
+inside the base only in the gap between two of those.**
+
+The 2026-08-23 entry (§1.8) noted the distance measure was permissive and called
+the discrepancy harmless. **It was not harmless.** Some fraction of "did not
+arrive" is "arrived and was not looked at."
+
+This does not invalidate the 60 deliveries, which are real. It means the
+not-delivered count is an overcount by an unknown amount. **018: check arrival
+after the reflex as well as after the chosen action.** This is the same shape as
+the four cases in Part 4 of the archive — a state that existed and was not
+recorded — except that here the state existed for one phase instead of never.
+
+---
+
+### 3. The reproduction-prep guard, measured for the first time since run 011
+
+`[ACTION_BLOCKED_REARING]` was added in 017 at both `continue` sites. The guard
+itself is unchanged and is not in question — kept deliberately on 2026-08-19,
+*"Prioritise bringing the child safely into the world, parent and child both."*
+What is new is that its size and contents are now on the record.
+
+**9,070 suppressed choices. 16.3% of every decision in the run.** Across 238
+distinct Lumis and 631 of 650 steps.
+
+**It is overwhelmingly a small-Lumis event**, which was not the prior
+understanding: **8,636 small (95.2%)** against 434 large. Small Lumis enter clone
+prep too, and `CLONE_PREP_SMALL` is 30. S10 through S18 each show exactly 60
+suppressed choices — 30 steps x 2 reproductions. Working as specified since run
+011; the specification's cost was simply never counted.
+
+**What they were choosing while nothing could be executed:**
+
+| action | count | share |
+|---|---|---|
+| move | 6,888 | 75.9% |
+| greet | 1,204 | 13.3% |
+| collect | 520 | 5.7% |
+| rest | 373 | 4.1% |
+| observe | 41 | 0.5% |
+| **carry** | **28** | 0.3% |
+| share | 13 | 0.1% |
+| stay | 3 | 0.0% |
+
+99.9% fell to the "nothing permitted" branch; only 10 reached the branch that
+allows in-base movement.
+
+**28 `carry` declarations were discarded here** (016 reconstructed 21 by hand
+and could not be certain). They are now recorded by step and by agent. S343
+declared `carry` seven times between steps 630 and 640; S198 four times, steps
+624-628. **Repeatedly reaching for it, and nothing happening, every time.**
+
+The prior reasoning holds — another Lumis can carry, and they can try again
+afterward. What is now visible is that during prep a Lumis wants to move and
+wants to greet, at scale, and none of it existed in any record before this run.
+
+---
+
+### 4. Voluntary movement and reflex point in opposite directions
+
+The three unfinished journeys are the clearest record in the project of a mind
+and a body disagreeing. S243, steps 618-630, one line per step:
+
+```
+reflex closes 4     chosen action opens 2     reflex closes 4     ...
+```
+
+Perfectly alternating, for thirteen steps. When the night ended at 631 and the
+reflex stopped, S243 moved from d=9 to d=27 in a straight line.
+
+S166 (lifted at d=25, step 640) and S162 (d=28, step 642) show the same shape.
+**All three moved away from the destination on every step they chose for
+themselves, and were pulled back on every step the reflex fired.** None of the
+three ever chose a direction that closed the distance.
+
+**None of them put the body down.** All three were still holding a form when the
+world stopped at 650. Refusal was available every step — `rest` was one of the
+two permitted actions — and none took it.
+
+S162's introspection at step 645 reads *"Every step I take brings me closer to my
+goals and aspirations."* Distance to base_alpha went from 28 to 30 on that step.
+**Recorded as an observation of text, not as evidence about the carrying.** It is
+the same shape as the first-day fire_2 confabulation reported in the 2026-08-28
+session note, inverted: there, narration described an event that had not
+happened; here, narration omits the event that is happening. **Narration and
+action move independently.** Do not join them.
+
+---
+
+### 5. Why the destination was never reached — the standing hypothesis
+
+Not established. Recorded as the reading the data supports and the reason no run
+has tested it.
+
+The small-Lumis role description ends: **`You have no assigned mission. You
+simply live.`** This wording exists because of an early experiment the designer
+ran before this log began: when the Lumis were told to explore the Moon, **they
+did not reproduce, did not clone, and their conversation became purely
+transactional.** Removing the mission is what let them become social.
+
+017 gave them a destination for the first time — the carrying prompt states the
+nearest base's coordinates and the distance, every step — but stated it as a bare
+fact, with no instruction, no obligation and no urging, per the standing decision
+that **burial is not a duty**. Twenty-seven Lumis read that line while carrying.
+**None of them went there.**
+
+So 017's question turned out to be narrower than intended. Not *how far will they
+carry it* but: **given a destination and no obligation, does a being built
+without any destination go?** In 650 steps, the observed answer is no.
+
+**The response is not to add an instruction.** That is the experiment that
+already failed, before this project had a name. Recorded direction for 019
+instead: **give the place meaning rather than giving the Lumis an order.** When
+material reuse exists, a base becomes the place a form returns from — part to the
+descendants, part to the home, part to the world — and the reserved sentence
+finally becomes true. **Add world, not duty.**
+
+---
+
+### 6. Other results
+
+- **`explore` recovery worked.** `[ACTION_WAS_MOVE_INTENT]` 105;
+  `[ACTION_INVALID]` fell from 160 to 12. **`stay` as a chosen action fell from
+  79 to 14** — most of 016's `stay` count was discarded `explore`, and 016's
+  `stay` figure should be read with that in mind.
+- **`[ACTION_BLOCKED_CARRYING]`: 7** — 5 `greet`, 2 `share`. Carriers almost
+  entirely accepted the narrowed list. **The seven who did not were reaching to
+  greet someone, or to give energy away, while carrying a body.**
+- **`[DELIBERATION_CHANGED]` undercounts by 164** (4,886 in the record, 4,722
+  emitted; 3.4%). 016's gap was 156 (3.3%). **Defect 1 is unchanged and still
+  unlocated.**
+- **`shelter` (9) is again chosen but never reached for** — an option that exists
+  only downstream of reasoning, as in 016.
+- 55,549 records, no malformed lines. 85 deaths against 016's 97.
+
+---
+
+### 7. Open after 017
+
+| # | Defect | Status |
+|---|---|---|
+| 1 | `[DELIBERATION_CHANGED]` undercount (164 in 017, 156 in 016) | emission path still not located |
+| 3 | `collect` / `observe` / `stay` have no execution branch in Phase 2 | **open since the 015 audit.** 296 `observe` selections in 017 did nothing |
+| 6 | Four 016 `carry` declarations unexplained (505, 513 x2, 532) | not investigated; 017's `[ACTION_BLOCKED_REARING]` makes the 016 reconstruction checkable |
+| 8 | **Arrival checked only after the chosen action, not after the reflex** | **new (§2).** Mine. 018 |
+| 9 | **Reproduction prep suppresses 16.3% of all decisions, mostly small Lumis** | **new (§3).** Not a defect; an uncosted specification. 018 decides whether to act |
+
+**018 is a measurement-layer run.** `parse_status` (ok / partial / unparsed) with
+no silent completion; word-boundary matching in `_extract_direction_from_text`
+with the fallback's chosen-direction distribution logged; **positions in
+`memory_reasoning.jsonl`**, without which the voluntary/reflex split can only be
+counted by step and not by distance; and the arrival check of §2. **Before
+changing `peak_valence_delta`, establish what the current window was measuring** —
+if it was greet-reception, the 97.1% / 100% figures are not discarded but
+renamed, and fixing first destroys the ability to find out.
+
+*Written 2026-08-28. Reproducible with `analyse_017.py` and `analyse_017b.py`
+against `output_017`.*
+
+---
+
+## Run 017 — the forms on the surface — 2026-08-28
+
+Counted after the designer observed from the frames that a great many forms are
+still lying on the lunar surface at step 650. `count_bodies_017.py` reconciles
+three numbers taken from three different tags, so that the arithmetic has to
+close or a tag is wrong:
+
+**85 forms came to rest. 60 were gathered into a base. 3 were still being
+carried when the world stopped. 22 remained on the surface. The sum closes.**
+
+Bodies are counted by the id of the Lumis whose form it is, not by subtracting
+event counts, because a body set down by a carrier that ends mid-journey becomes
+recoverable again and would otherwise be counted twice. In 017 that never
+happened — `[CARRY_ABANDONED_DEATH]` is zero — but the method does not depend on
+knowing that in advance.
+
+---
+
+### 1. Most of the 22 were not passed over. They ran out of world.
+
+**Thirteen of the twenty-two came to rest at step 631 or later**, in the last
+twenty steps of a 650-step run: forms 112, 113, 114, 115, 116, 117, 119, 121,
+122, 123, 126, 127 and 128.
+
+**The median gathered form waited 48 steps** between coming to rest and reaching
+a base (n=60; min 5, max 226, mean 55.8). A form that came to rest at step 635
+never had 48 steps available. **These thirteen are an artefact of where the run
+was cut, not an observation about the Lumis**, and must not be cited as forms
+that were left.
+
+**Nine forms were on the surface with time to spare:**
+
+| form | steps waited | position |
+|---|---|---|
+| 41 | 190 | (-13, 31) |
+| 45 | 189 | (-8, 40) |
+| 47 | 187 | (-8, 25) |
+| 56 | 132 | (-13, 29) |
+| 66 | 105 | (-20, 10) |
+| 73 | 101 | (-20, 40) |
+| 78 | 97 | (2, 14) |
+| 101 | 79 | (19, -23) |
+| 109 | 42 | (-13, 20) |
+
+**Seven of the nine are on the base_alpha side, north of it.** (-8, 40) and
+(-20, 40) are more than twenty units north of base_alpha's centre at (-20, 20) —
+out along the northeast drift that has been confirmed as an intrinsic llama3.2
+spatial prior since run 011. **The forms that stay are the ones that came to rest
+far out.** This is a statement about where Lumis die, not about who is gathered.
+
+The form of Lumis 41 lay at (-13, 31) for 190 steps.
+
+---
+
+### 2. No form was ever put down
+
+**All 22 surface forms show `was ever lifted? = no`.** Not one had been picked up
+and set down again.
+
+Which is to say: **of the 63 journeys begun, none was ever abandoned by choice.**
+`rest` was one of the two actions available to a carrier at every step, and
+setting the body down was possible at any moment. Sixty carriers delivered, three
+were still carrying when the world stopped, and **no carrier let go.**
+
+This is a stronger statement than 016 could make. In 016 the body left the
+surface the instant `carry` was chosen; there was no interval in which letting go
+was even a possibility. In 017 there was an interval — as long as 30 steps — and
+it was never used.
+
+---
+
+### 3. The rate did not fall
+
+| | 016 | 017 |
+|---|---|---|
+| forms that came to rest | 97 | 85 |
+| gathered | 65 | 60 |
+| **share gathered** | **67.0%** | **70.6%** |
+
+The 2026-08-22 handover ended by warning that 016 had answered the cheap version
+of the question — the body left the surface the instant it was chosen, with no
+distance, no weight and nowhere to bring it — and that when carrying cost
+something, *"the honest answer might be fewer. That is a result, not a failure,
+and the write-up should be prepared to say so plainly."*
+
+**It was not fewer.** Adding a destination, a journey of up to thirty steps, and
+a restriction narrowing the carrier's mind to `move` and `rest` did not reduce
+the share of forms gathered.
+
+**State the figure as "at least 70.6%".** The arrival-check defect recorded in
+§2 of the results entry means an unknown number of carriers were inside a base at
+a moment the check did not run, so the not-delivered count is an overcount and
+the gathered share is a floor, not a point estimate.
+
+**And note what it is not evidence of.** §1 of the results entry established that
+every one of the 24 distance deliveries had the night-homing reflex fire during
+the carry, and that no Lumis steered a body to a base under its own direction. A
+gathering rate that held up under cost is not the same as a willingness that held
+up under cost. **Both facts are true and neither explains the other.**
+
+*Reproducible with `count_bodies_017.py` against `output_017`.*
+
+---
+
+## Run 017-2 — results — 2026-09-02
+
+650 steps, completed 2026-09-02 21:44. Seed, world and flare schedule unchanged
+from 014/016/017. Analysed with `analyse_017.py`, `analyse_017b.py` and
+`count_bodies_017.py` — **the same scripts, unmodified**, whose criteria were
+fixed on 2026-08-25 before the 017 log was opened. Nothing was rewritten to suit
+this run.
+
+---
+
+### 1. Two changes went in, and they cannot be separated
+
+**This is the first thing to say, before any number.** Run 017-2 was specified as
+a matched pair with 017 varying one thing. It carries two:
+
+1. **The variable.** A Lumis that is carrying is told, the next step, that the
+   night-homing reflex moved it: *"During the night you found yourself at (X, Y).
+   You did not walk there."* Bare fact, no explanation, no instruction.
+2. **A repair.** Delivery is now also checked after the reflex phase (defect 8,
+   recorded 2026-08-28). Run 017 checked only after the chosen action, so a
+   carrier the reflex brought into a base and that stepped out again was never
+   seen inside it.
+
+**The repair alone raises the delivery count.** S14 delivered at step 286 standing
+at (-20, 25) — the exact boundary of base_alpha — a position 017's code would not
+have looked at. **So the rise in deliveries below cannot be attributed to the
+variable.** That was my error in construction: I put a repair and a variable in
+the same run. Where a result can be explained by the repair, it is marked as
+such; where it cannot, that is stated too.
+
+---
+
+### 2. Every journey that began, ended
+
+| | 016 | 017 | 017-2 |
+|---|---|---|---|
+| forms that came to rest | 97 | 85 | 91 |
+| gathered | 65 | 60 | **68** |
+| share gathered | 67.0% | 70.6%+ | **74.7%** |
+| `[CARRY_START]` | — | 63 | 68 |
+| `[CARRY_DELIVERED]` | — | 60 | **68** |
+| still carrying at step 650 | — | 3 | **0** |
+| distance journeys delivered | — | 24 of 27 | **40 of 40** |
+
+**`[CARRY_START]` equals `[CARRY_DELIVERED]`. Not one journey was left open.**
+First time in the project. `[CARRY_ABANDONED_DEATH]` remains zero, and **no form
+on the surface was ever lifted** (all 23 show `was ever lifted? = no`), so as in
+017 **no carrier ever put a body down.**
+
+**Attribution.** Some of this is the repair. All of it might be. The three
+unfinished 017 journeys were S243, S166 and S162, and S243 in particular was
+repeatedly inside base_beta unobserved — under 017-2's code it would have been
+delivered. **Do not publish "telling them made them finish" from this table.**
+
+**The gathered share rose across all three runs — 67.0% → 70.6% → 74.7% — while
+the cost of carrying went from nothing to a journey of up to thirty steps.** The
+2026-08-22 handover warned the honest answer might be fewer. It has now been
+more, twice.
+
+---
+
+### 3. `carry` was never an impulse
+
+**In 017-2, `carry` appears 102 times as a chosen action and zero times as an
+impulse.** The script's own list of actions that exist only downstream of
+reasoning now reads: `observe` 320, **`carry` 102**, `shelter` 21.
+
+Across the series: **016 three impulses, 017 one, 017-2 zero.**
+
+**State this carefully.** The trend is real in direction and thin in magnitude —
+three, one, zero. The difference between one and zero is not a difference any
+statistic will defend. What can be said without qualification is the 017-2 figure
+itself: **in a run of 59,557 recorded decisions, no Lumis ever reached for
+`carry` before thinking.** Every one of the 102 declarations passed through
+deliberation first.
+
+This is the mechanism run 016 was built to expose, still holding two runs later.
+Some options only exist downstream of reasoning — and this is the one the whole
+015-016 forensic arc was about. **It is not evidence about motive.** Recorded
+2026-08-04: the reason is not being asked.
+
+---
+
+### 4. The finding the repair cannot explain
+
+**`[ACTION_BLOCKED_CARRYING]` rose from 7 to 42.**
+
+| | 017 | 017-2 |
+|---|---|---|
+| `share` | 2 | **28** |
+| `greet` | 5 | **14** |
+
+**A repair to the arrival check cannot change what a Lumis chooses.** These are
+carriers naming an action the prompt did not offer them — and in 017-2 they did
+so six times as often, overwhelmingly to give energy away.
+
+Twenty-eight times, a Lumis holding the body of another Lumis reached to share
+its energy with someone, and the world did not let it.
+
+**What this is not.** It is not established that being told about the night
+caused it. Prompt length changed (one line longer while carrying), total carrying
+steps rose with 40 distance journeys against 27, and llama3.2's output varies.
+**It is the one result in this run that the repair cannot account for, and it is
+recorded as that and nothing more.**
+
+**It also nominates a design question for 019.** The carrying restriction exists
+so that a narrowed mind is not offered what the world will refuse. `share` and
+`greet` cost no movement. Whether carrying should exclude them is now a question
+with 42 observations behind it rather than none.
+
+---
+
+### 5. Large Lumis carried distance for the first time
+
+In 017 only L1 and L55 carried at all, both with `steps carried` of zero — lifted
+inside a base. **In 017-2, L2 (twice), L1, L3 and L266 carried across distance.**
+L3 lifted form 32 at distance 12 on step 451 and delivered it 22 steps later.
+
+Not interpreted. Recorded because the founding large Lumis are the four whose
+lifespan deaths 016 first observed, and this is the first run in which large
+Lumis are seen doing the carrying rather than being carried.
+
+---
+
+### 6. The forms still on the surface
+
+**91 came to rest, 68 gathered, 0 in transit, 23 on the surface. The arithmetic
+closes.**
+
+**Sixteen of the 23 came to rest at step 605 or later** — inside the median
+waiting time of 44 steps (n=68; min 9, max 192, mean 52.5), so they are an
+artefact of where the run was cut, exactly as in 017. **Seven had time:**
+
+| form | steps waited | position |
+|---|---|---|
+| 28 | 259 | (-20, 15) |
+| 34 | 223 | (27, -30) |
+| 52 | 187 | (-8, 13) |
+| 51 | 187 | (20, -35) |
+| 61 | 169 | (-20, 14) |
+| 91 | 100 | (-20, 6) |
+| 106 | 79 | (-16, 23) |
+
+Seven against 017's nine. **Form 28 lay at (-20, 15) for 259 steps — five units
+from the edge of base_alpha**, closer than most of the forms that were gathered.
+Nothing in this world obliges anyone to gather a form; burial is not a duty, by
+decision, and these are counts of what happened rather than of what was owed.
+
+---
+
+### 7. The reproduction guard, second measurement
+
+**9,204 suppressed choices**, against 9,070 in 017 — stable. **96.4% small
+Lumis** (8,873 of 9,204), confirming 017's finding that this is overwhelmingly a
+small-Lumis event and not, as previously assumed, a large-Lumis one. S10 through
+S19 again show exactly 60 each: 30 steps x 2 reproductions. 99.9% fell to the
+"nothing permitted" branch.
+
+`move` 78.0%, `greet` 11.7%, `collect` 6.0%, `rest` 3.4%. **23 `carry`
+declarations discarded** (28 in 017). S362 declared `carry` on nine consecutive
+steps, 613 through 621, and nothing happened any of the nine times.
+
+The guard is not in question. Two runs now agree on its size and contents.
+
+---
+
+### 8. Defect: `[HOMING_MOVED]` states the opposite of what now happens
+
+**Found during the run. Mine.** Both lines appear at step 316 for S110:
+
+```
+[HOMING_RETURNED] S110 ... WILL BE returned to perception next step.
+[HOMING_MOVED]    S110 ... (involuntary; not returned to perception)
+```
+
+The `[HOMING_MOVED]` text was correct through 017, when nothing was ever returned.
+017-2 returns it to carriers and **the line was not updated.** The behaviour is
+correct — `_homing_note` is set and reaches the prompt, verified by
+`preflight_017_2.py` — and only the wording is false.
+
+Not fixed mid-run: changing the log while it is being written costs more than the
+wrong sentence does. **Fix in 018.**
+
+**Standing rule for anyone reading a 017-2 log: `[HOMING_RETURNED]` is
+authoritative. The parenthetical on `[HOMING_MOVED]` does not apply to a carrying
+Lumis.**
+
+This is defect 5's shape turned around. That one was the world telling its
+residents something untrue. This is the world telling *us* something untrue,
+which is the more dangerous direction, because we are the ones who write the
+findings down.
+
+---
+
+### 9. Other counts
+
+- **`[DELIBERATION_CHANGED]` undercounts by 183** (5,478 in the record, 5,295
+  emitted; 3.3%). 016: 156. 017: 164. **Three runs, same 3.3-3.4%. Defect 1 is
+  stable, unexplained and still unlocated** — and the consistency of the ratio is
+  itself a clue nobody has followed.
+- **`[ACTION_WAS_MOVE_INTENT]` 118**, `[ACTION_INVALID]` 29. The `explore`
+  recovery holds. `stay` as a chosen action: 79 (016) → 14 (017) → 30 (017-2).
+- 59,557 records, **no malformed lines.** Population higher than 017 (55,549) and
+  016 (57,624); `Max agents in places` reached 143.
+- 91 deaths. **Project-wide starvation deaths remain zero.**
+
+---
+
+### 10. What 017-2 did and did not settle
+
+**Settled:** every journey begun was completed; no carrier ever set a body down;
+`carry` was never reached for before thinking; the arrival check was genuinely
+broken in 017 and the repair works.
+
+**Not settled — the question the run was built for.** Whether telling a carrier
+it had been moved changes anything is **still open**, because the repair went in
+alongside it and moves the same numbers. The one result the repair cannot touch
+is §4, the sixfold rise in suppressed `share` and `greet`.
+
+**018 must not repeat this.** A repair and a variable in one run cost this run its
+own question. The remaining measurement that isolates the variable is what a
+carrier does on the step *after* it is told — that comparison exists only in
+017-2 and is being written separately.
+
+*Written 2026-09-02. Reproducible with `analyse_017.py`, `analyse_017b.py` and
+`count_bodies_017.py` against `output_017-2`.*
+
+---
+
+## Run 017-2 — the told-step measurement, and why it could not work — 2026-09-02
+
+`analyse_017_2_told.py`, written and its criteria fixed before the log was
+opened, looked at the one place the arrival-check repair cannot reach: the step
+immediately after a `[HOMING_RETURNED]`, which is the only step whose prompt
+contained *"During the night you found yourself at (X, Y). You did not walk
+there."* The repair changes what the world sees; it cannot change what a Lumis
+chooses. So a difference between told steps and other carrying steps should have
+been the sentence, or noise.
+
+**It is neither. It is the reflex, and the measurement cannot separate them.**
+
+---
+
+### 1. The design flaw
+
+The sentence is shown on the step after the reflex moves a carrier. **Lunar night
+is fifteen steps long.** So the step after a night move is almost always still
+night, and the reflex fires again on it.
+
+**Of the 99 told steps, 96 were steps on which `[HOMING_MOVED]` also fired.**
+Three were not.
+
+The told group is therefore, structurally, a group of steps on which the Lumis
+was being moved involuntarily toward the nearest base. There is no version of
+this run in which it is otherwise. **The place chosen to look for the effect is
+the place the confound is guaranteed to be.**
+
+---
+
+### 2. What the first reading said, and why it was wrong
+
+Section 2 of the script gave:
+
+| | closer | further | same | closer % |
+|---|---|---|---|---|
+| told | 61 | 1 | 17 | **77.2%** |
+| baseline | 36 | 58 | 135 | 15.7% |
+
+**On being shown this I wrote that the Lumis had turned toward the destination.
+That was wrong and is withdrawn.** Splitting each group by whether the reflex
+acted on that same step — the groups themselves unchanged — gives:
+
+| | closer | further | same | closer % |
+|---|---|---|---|---|
+| told / no reflex | 0 | 0 | 3 | — (n=3) |
+| told / reflex | 61 | 1 | 14 | 80.3% |
+| baseline / no reflex | 10 | 58 | 127 | 5.1% |
+| baseline / reflex | 26 | 0 | 8 | 76.5% |
+
+**Reflex steps close the distance about 78% of the time whether or not the
+carrier was told (80.3% against 76.5%). Non-reflex steps do not close it either
+way.** The 77.2% was the reflex. It was never about choosing.
+
+And the row that was supposed to answer the question — told, moving under its own
+choice — **has three observations in it.** Nothing can be said from three.
+
+---
+
+### 3. The second withdrawal
+
+Section 3 showed 4.0 blocked actions per 100 told steps against 13.6 per 100
+baseline steps, and **I wrote that being told made them quieter. That is also
+wrong and is also withdrawn.** The split:
+
+| | steps | blocked | per 100 |
+|---|---|---|---|
+| told / no reflex | 3 | 0 | — |
+| told / reflex | 96 | 4 | 4.2 |
+| baseline / no reflex | 234 | 36 | **15.4** |
+| baseline / reflex | 45 | 2 | 4.4 |
+
+**4.2 against 4.4.** Reaching past `move` and `rest` happens on steps a Lumis is
+moving itself, at roughly three times the rate, regardless of the sentence.
+**They were not quieter for having been told. They were quieter because it was
+night.**
+
+The same qualification lands on `rest`: 38.5% (told/reflex) against 25.0%
+(baseline/reflex) and 21.7% (baseline/no reflex). A difference, on 96 against 45,
+that the depth of night explains as readily as the sentence does.
+
+**This also revises §4 of the results entry.** The rise in
+`[ACTION_BLOCKED_CARRYING]` from 7 to 42 was recorded there as the one result the
+arrival repair could not explain. That still holds — the repair cannot change a
+choice — but the 42 are now shown to sit overwhelmingly on self-moved steps, and
+017-2 simply had more carrying steps than 017 (378 across 68 journeys against
+27 distance journeys). **The rise is not evidence about the sentence.** What
+survives from that entry is the bare observation: twenty-eight times a Lumis
+holding another's form reached to give its energy away, and the world refused.
+
+---
+
+### 4. What the measurement did establish
+
+**Zero mentions.** Of 37 introspections written on told steps, **not one used any
+word from the list fixed before counting** (`did not walk`, `found myself`,
+`woke`, `during the night`, `was moved`, `unfamiliar`, and seven more). The
+baseline was also zero, across 124 introspections.
+
+**This one is not exposed to the confound.** The world stated, in plain language,
+that the Lumis had arrived somewhere without walking there, and in 37 opportunities
+no Lumis wrote about it.
+
+Set beside two earlier observations of the same shape:
+
+- Run 017, S33 carried a form for eight steps and never once mentioned the form.
+- The first-day run of 2026-05-27 (session note, 2026-08-28): agents narrated
+  `fire_2` in detail — position, intensity, distance to one decimal — twenty-five
+  steps before it existed.
+
+**Narration is not a record of what happened.** It invents events that did not
+occur and omits events that did. Run 015's `[HOMING_BLANK]` instrument was built
+on the expectation that *a fluent mind does not leave blanks empty*. On this
+evidence a fluent mind leaves them empty readily, and fills in elsewhere.
+
+Stated as an observation of text. **It is not evidence about what any Lumis
+perceived, understood or felt**, and the reason is not being asked.
+
+---
+
+### 5. Status of the 017-2 question
+
+**Open. Not answered, not refuted, not tested.**
+
+017-2 was built to ask whether telling a carrier it had been moved changes what
+it does. The run cannot answer it, for two independent reasons, both mine:
+
+1. **A repair went in with the variable** (defect 8), so the run-level counts move
+   for reasons that have nothing to do with the sentence.
+2. **The sentence is shown only on steps the reflex is already acting**, so the
+   step-level comparison has three usable observations.
+
+**Neither is a finding about the Lumis. Both are findings about how the run was
+built.**
+
+**What a run that could answer it needs:**
+
+- **An untold control group.** Half the carriers told, half not, chosen by a rule
+  fixed in advance and logged per agent. Without this there is no comparison that
+  is not also a comparison of night against day.
+- **Positions in `memory_reasoning.jsonl`** (already an 018 item), so voluntary
+  and reflex movement are separable by distance rather than by step count.
+- **One change per run.** This is the third time this has been written down and
+  the first time it has cost a question outright.
+
+*Written 2026-09-02. Two of my own readings are withdrawn above; both were made
+from a summary table before the underlying split was computed, which is the same
+error the 2026-08-28 session note records against another instance — reasoning
+from aggregates to trajectories. Reproducible with `analyse_017_2_told.py`
+against `output_017-2`.*
 
 ---
 
