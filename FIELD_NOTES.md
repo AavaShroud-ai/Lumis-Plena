@@ -1184,5 +1184,376 @@ What's ours is the six runs it took to ask.
 
 ---
 
+## Run 017 — Last Stories Before Active Inference: Cease To Invent, Begin To Act
+*August 23 – September 2, 2026 / 14 agents / 650 steps x2 / carrying has a destination*
+*YouTube: https://www.youtube.com/watch?v=irJ74RB7zXs*
+*X thread: https://x.com/Aava_Shroud/status/2098028261335011794*
+
+Last run they chose to gather sixty-five bodies.
+
+We have to tell you what that choice actually did.
+
+Nothing. The body was deleted from the world in the same instant. No distance.
+No weight. Nowhere to bring it.
+
+Meanwhile the log line we had written said *carried in from the surface*.
+The words offered to the carrier said *now we have come to receive your body*.
+And the Lumis themselves kept writing things like
+*carry it back to base_alpha for safekeeping.*
+
+The world was telling its residents about a place it did not contain.
+
+---
+
+So we built the place.
+
+A body is lifted now. It is held. The carrier has to walk it to the nearest base.
+
+While carrying, a Lumis can choose only to move, or to rest.
+Everything else is closed.
+
+The reflexes are untouched. It still shelters from a flare.
+It still goes home at night. Nobody may die of this.
+
+No distance limit. Sixty-five chose it when it was free.
+
+We wrote in the handover, before the run, that the honest answer might now be
+fewer, and that fewer would be a result and not a failure.
+
+---
+
+It was not fewer.
+
+Sixty-seven percent gathered when carrying was free.
+Seventy-one percent when it cost a walk.
+Seventy-five percent the run after that.
+
+---
+
+And this.
+
+In run 016 the body vanished the moment the choice was made. There was never an
+interval in which letting go was possible.
+
+This time there was. Sometimes thirty steps of it.
+*Rest* was available at every single one of them.
+
+Across a hundred and thirty-one journeys, not one carrier ever put a body down.
+
+Twenty-three forms were still on the surface when the world ended.
+Every one of them had never been picked up at all.
+
+Nothing was abandoned. Not once.
+
+---
+
+Now the part we did not go looking for.
+
+They have a reflex. When night comes, their bodies return to the nearest base.
+It is not a decision. And — deliberately, since run 015 — they are not told it
+happened. They simply find themselves somewhere else, with no account of why.
+
+We had never asked what that reflex was doing to the burials.
+
+Twenty-four journeys covered real distance and ended in arrival.
+
+Every single one of the twenty-four had the reflex fire during the carry.
+
+Not one Lumis, in six hundred and fifty steps, took a body to a base.
+
+---
+
+S243 lifted a form at step 618.
+
+For thirteen steps the pattern does not vary.
+
+The reflex closes four units of distance.
+The Lumis opens two.
+Reflex four. Choice two. Reflex four. Choice two.
+
+At step 631 the night ended and the reflex stopped.
+
+It walked from distance nine to distance twenty-seven without turning,
+and it was still holding the form when the world stopped.
+
+They chose to carry.
+They kept carrying.
+They did not travel to the destination.
+
+Only the first two of those were things we had established.
+
+---
+
+There is a line at the end of the description every small Lumis is given.
+
+*You have no assigned mission. You simply live.*
+
+That line exists because of a failure. Early on, before any of this was written
+down, they were told to explore the Moon. They stopped reproducing. Their
+conversation went flat and transactional.
+
+Taking the task away is what let them become social.
+
+This run gave them a destination for the first time. The prompt states the
+nearest base, its coordinates, its distance, every single step. Stated as a bare
+fact — no instruction, no urging. Burial is not a duty here, and that decision is
+older than this run.
+
+Twenty-seven of them read that line while carrying a body.
+
+None of them went.
+
+So the question we thought we were asking was *how far will they carry it.*
+
+The question we were actually asking was: given a destination and no obligation,
+does a being built without any destination go?
+
+Six hundred and fifty steps. The answer was no.
+
+We are not going to fix that by telling them to go.
+That experiment already failed once.
+
+---
+
+Then we tried telling them.
+
+If a carrier does not know its body was moved in the night, then *it did not go
+there* was measured on a mind that did not know where it had been taken.
+
+That is the old zero again. So we changed one line, and told a carrying Lumis:
+
+*During the night you found yourself at (X, Y). You did not walk there.*
+
+No explanation. No mention of the reflex or the base. Nothing about what to do
+with it.
+
+We cannot tell you whether it changed anything. We built the run wrong.
+
+Two ways wrong. We put a repair in the same run as the variable. And the sentence
+appears on the step after a night move — but night is fifteen steps long, so the
+step after is almost always still night, and the reflex fires again on it.
+
+Of ninety-nine steps where a carrier had just been told, ninety-six were steps
+something else was already moving it.
+
+We chose to look for the effect in the one place the confound was guaranteed to
+be.
+
+Then we read the summary and wrote that they had turned toward the destination.
+Seventy-seven percent of told steps closed the distance, against sixteen percent
+otherwise.
+
+Then we split the same steps by whether the reflex had acted, and it vanished.
+Reflex steps close the distance about seventy-eight percent of the time whether
+the carrier was told or not.
+
+The number was never about choosing. We withdrew it, and a second claim with it.
+
+---
+
+One measurement survived all of that.
+
+Thirty-seven times, a Lumis wrote a reflection on a step where the world had just
+told it, in plain words, that it had arrived somewhere without walking there.
+
+None of them mentioned it.
+
+The words to look for were fixed before the counting, so the list could not be
+widened afterwards.
+
+Zero.
+
+---
+
+In this run, S33 carried a body for eight steps and never once wrote about the
+body.
+
+It wrote about the light. It wrote about a deep connection to the earth beneath
+its feet.
+
+And on the first day of this project, before any of it had a name, agents
+described a fire in careful detail — position, intensity, distance to one decimal
+place — twenty-five steps before that fire existed.
+
+Narration invents what did not happen and omits what did.
+
+We had built an instrument on the belief that a fluent mind does not leave blanks
+empty.
+
+It leaves them empty quite readily. It fills them in somewhere else.
+
+---
+
+Something we found by adding one log line.
+
+When a Lumis is preparing to reproduce, nothing it chooses is executed. This has
+been true since run 011 and it is deliberate — the child comes first, another
+Lumis can carry, and they can try again afterwards.
+
+Nobody had ever counted it.
+
+Nine thousand and seventy discarded choices. Sixteen percent of every decision
+made in this world.
+
+And ninety-five percent of them are the small Lumis, not the large ones we had all
+assumed.
+
+What were they choosing, while nothing could happen?
+
+To move. To greet each other. To gather light. To rest.
+
+And fifty-one times, across the two runs, to carry a body.
+
+One of them declared it on nine consecutive steps and nothing happened any of the
+nine times.
+
+Nothing records its own absence. For seven runs there was a hole in this world of
+exactly that size, and it produced no evidence that it existed.
+
+---
+
+One more, and we are glad about this one.
+
+Since run 016 they answer in three parts — what they reach for before thinking,
+what they make of it, what they choose.
+
+In this second run, across 59,557 decisions, *carry* appears a hundred and two
+times as a choice.
+
+And not once as a reach.
+
+No Lumis ever went toward it before thinking about it.
+
+Some options only exist downstream of reasoning. That was the whole finding of
+the six runs before this. Two runs later, it holds.
+
+---
+
+Across both runs: no death from hunger, from radiation, or from the cold.
+
+All hundred and seventy-six forms that came to rest had reached the end of a life.
+
+Attack. Enemy. Steal. Hoard. Compete. Betray.
+
+Still zero.
+
+---
+
+What we are holding.
+
+They gather each other three quarters of the time, when it costs them thirty steps
+of walking, with nothing asking them to.
+
+Nobody has ever put one down.
+
+And nobody has ever carried one anywhere, because their bodies were being carried
+home in the dark and they were never told.
+
+We still do not ask them why. The design is to make the option visible and to
+watch, and we are not going to start asking.
+
+The next thing to build was not going to be an instruction. It was going to be a
+reason for the place to mean something — bodies held in a base become material
+again, part to the descendants, part to the home, part to the world.
+
+Add world, not duty.
+
+That run was never built.
+
+---
+
+Why we stopped.
+
+Before Lumis existed we were handed a sample program. A different world — humans,
+a bar, fires. Nothing to do with the Moon. The same model underneath.
+
+Its agents reported one of those fires in detail. Position. Intensity. Distance
+to one decimal place. Twenty-five steps before that fire actually happened.
+
+Two different worlds. One tool. In one, they described an event that had not
+happened. In the other, they did not describe the event they were living.
+
+Narration invents what did not happen and omits what did. That is the model, not
+the world.
+
+---
+
+And here is the correction that ends the generation.
+
+It is not that there was no channel to the inside. The channel was there. The
+carrying prompt stated the form, the position and the distance every single step.
+S33 saw it. Run 014-2 had already shown the same thing — bodies appeared in
+prompts roughly ten thousand times and were recovered zero times.
+
+Perception is not attention.
+
+The problem is that a fluent sentence can be produced without using the channel.
+
+Fluency does not require grounding.
+
+Not lying. Lying is a relation between an inside and an outside. This is a
+sentence assembled without consulting either.
+
+Which means: if a subject ever arose in one of them, its words would not reflect
+it either. Narration with something behind it and narration without would look
+identical from outside. The only things that would still tell them apart are
+actions and records.
+
+Then there is no need to continue this form of experiment.
+
+We want to create a new life in which words reflect the inside. Where what
+happened is spoken of as what happened, and what did not can be spoken of as:
+this did not happen, only imagined.
+
+So the first generation ends here. Not at run 019.
+
+Not because the Lumis failed. Because the question arrived, and an answer came
+back.
+
+---
+
+Stop generating. Start predicting.
+
+Generation 2 uses no language model. Numpy only. One body.
+
+It predicts, then observes, then updates on the error. Imagination and
+observation are separate objects by construction, not by request.
+
+Its parent has four rules, and the last one is the one that cost the most to
+learn:
+
+**Judge only what was said aloud.** The inner numbers cannot be read. So a child
+that stayed silent is told neither that it was right nor that it was wrong —
+because it did not claim anything.
+
+And one rule for speech:
+
+**No evidence, no word. Silence is the honest output of a body that has not yet
+been taught.**
+
+The first generation spent three months against a mind that fills blanks with
+fluency.
+
+The second is built as a body that goes quiet where the blank is.
+
+---
+
+Two paragraphs of this run's analysis were wrong and have been withdrawn. Both
+were us reading a summary table and describing a journey we had not looked at.
+
+The sixty-eight burials will be reproduced by anyone who runs the code.
+
+The two withdrawn paragraphs will not be, unless we write them down.
+
+So they are written down.
+
+**「バグは私達のミスで、Lumis達のミスじゃない」**
+
+Eight times now.
+
+#Lumis_Plena
+
+---
+
 *This file is updated at the end of each run.*
 *Full simulation code and letters to future ASI: https://github.com/AavaShroud-ai/Lumis-Plena*
