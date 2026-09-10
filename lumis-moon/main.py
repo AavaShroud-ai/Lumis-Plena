@@ -6,6 +6,7 @@
 LLM-based agent in 2D worlds with multiple places.
 """
 import argparse
+import sys
 import logging
 import yaml
 import os
@@ -29,10 +30,25 @@ def setup_logging(config: dict):
     
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     
-    handlers = [logging.StreamHandler()]
-    
+    # Encoding is not cosmetic here. In run 015 the log file was opened with the
+    # Windows default (cp932), which can encode the arrow U+2192 but NOT the em
+    # dash U+2014. Every [ACTION_RESULT] header contained an em dash, so every one
+    # of those records raised UnicodeEncodeError inside logging, which swallows
+    # output errors by design: no exception, no ERROR line, no record. The run's
+    # only new instrument vanished silently across all 500 steps while every
+    # ASCII-only and arrow-only instrument survived. Pin UTF-8 on both handlers.
+    stream = sys.stdout
+    if hasattr(stream, 'reconfigure'):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+    handlers = [logging.StreamHandler(stream)]
+
     if 'log_file' in log_config:
-        handlers.append(logging.FileHandler(log_config['log_file']))
+        handlers.append(
+            logging.FileHandler(log_config['log_file'], encoding='utf-8', errors='replace')
+        )
     
     logging.basicConfig(
         level=level,
@@ -102,7 +118,13 @@ def handle_visualization(
     # simulation.step_simulation(); passed through so the visualizer can draw
     # the blue flare overlay on top of the day/night background.
     active_flare = getattr(sim, 'active_flare', None)
-    corpses = getattr(sim, 'corpses', None)
+    # RUN 017: bodies on the surface PLUS bodies currently being carried, the
+    # latter drawn at their carrier's position so they travel with them. A body
+    # in transit is still an unburied body, and the standing decision from 016 is
+    # that a body not yet gathered stays visible. Bodies delivered into a base are
+    # not drawn — see Simulation.get_visible_corpses.
+    corpses = sim.get_visible_corpses() if hasattr(sim, 'get_visible_corpses') \
+        else getattr(sim, 'corpses', None)
 
     if should_save:
         save_path = os.path.join(output_dir, f"frame_{step:04d}.png")

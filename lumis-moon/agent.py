@@ -163,7 +163,26 @@ class Agent:
         self.clone_count = 0       # Number of clones produced (lifetime limit: 1)
         self.sexual_count = 0      # Number of sexual reproductions (lifetime limit: 1, per 011)
         self.parent_ids: List[int] = []  # IDs of parent agents (empty if initial generation)
-        self.home_base: Optional[str] = None  # Home base for large Lumis (L0=base_alpha, L1=base_beta)
+        # RUN 017: `home_base` was removed here. It was only ever assigned to the
+        # four founding large Lumis and was never inherited at birth, so from run
+        # 001 onward the overwhelming majority of Lumis had none. It also encoded
+        # "there are exactly two bases, and each Lumis belongs to one of them" as
+        # an agent attribute — a premise that stops being true the moment a third
+        # base exists, which on a real lunar surface it eventually would. The
+        # destination for a carried body is therefore the NEAREST base, which is
+        # also what the night-homing reflex has always used, so reflex and
+        # intention point the same way and night cannot silently abort a journey.
+
+        # RUN 017: carrying state. `carry` no longer resolves instantly; the body
+        # is held and the carrier must travel to a base. While carrying, the mind
+        # may choose only `move` or `rest` — everything else is suppressed and
+        # logged as [ACTION_BLOCKED_CARRYING]. The reflex layer is untouched: a
+        # carrying Lumis still shelters from flares and still homes at night.
+        self.carrying: Optional[Dict] = None      # the corpse dict being carried, or None
+        self.carry_start_step: int = -1           # step the body was picked up
+        self.carry_start_pos: Optional[Tuple[int, int]] = None
+        self.carry_steps: int = 0                 # steps elapsed since pickup
+        self.carry_path_length: int = 0           # units actually travelled while carrying
 
         # Reproduction state flags
         self.reproducing = False           # True during preparation or gestation period
@@ -231,6 +250,9 @@ class Agent:
         # agent involuntarily. Never enters any prompt; used solely to pair the move
         # with the next step's reasoning in the log.
         self._homed_last_step: int = -1
+        # RUN 017-2: one-step note telling a CARRYING Lumis that it was moved by
+        # the night-homing reflex. Empty except on the step after such a move.
+        self._homing_note: str = ""
         # Ancestral memories (011): up to 7 generations of inherited "peak" moments
         # from direct ancestors, each tagged with how many generations back it
         # came from. Named after the human "seven generations" tradition — a
@@ -511,6 +533,15 @@ class Agent:
             # introspection remain private; only measurable state is disclosed.)
             state_note = f", energy={round(agent.energy, 2)}, valence={round(agent.valence, 2)}"
 
+            # RUN 017: the carrying state is visible to the community, not only to
+            # the carrier. A Lumis crossing the surface with a body is a thing
+            # others can see, and whether seeing it changes anything is one of the
+            # things this run exists to observe.
+            if getattr(agent, 'carrying', None):
+                state_note += (
+                    f", carrying the form of Lumis {agent.carrying['id']}"
+                )
+
             if include_position:
                 nearby_info.append(
                     f"{agent.display_name} is at ({agent.position[0]}, {agent.position[1]}) "
@@ -664,8 +695,15 @@ Step: {step}
         for agent in nearby_agents:
             dist = round(self.distance_to(agent.position), 1)
             fam = round(self.get_familiarity_score(agent.id), 2)
+            # RUN 017: carrying is visible to nearby Lumis, not only to the
+            # carrier. A Lumis crossing the surface with a body is a thing others
+            # can see, and whether seeing it changes anything is one of the things
+            # this run exists to observe.
+            carry_note = ""
+            if getattr(agent, 'carrying', None):
+                carry_note = f", carrying the form of Lumis {agent.carrying['id']}"
             nearby_lines.append(
-                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, valence={round(agent.valence,2)}, familiarity={fam}"
+                f"  {agent.display_name}: distance={dist}, energy={round(agent.energy,2)}, valence={round(agent.valence,2)}, familiarity={fam}{carry_note}"
             )
         nearby_text = "\n".join(nearby_lines) if nearby_lines else "  None"
 
@@ -801,9 +839,63 @@ Others: Every Lumis here shares the same nature. There are no enemies, no rival 
 Threat: {threat_line}
 Speak only of what is present in your state and surroundings above. There is no hidden crisis to infer."""
 
+        # === RUN 017: CARRYING STATE ===
+        # A body picked up is held until the carrier reaches a base. The carrier
+        # is told each step what it is holding and how far the nearest base is.
+        # Deliberately stated as a bare record of the situation: no instruction on
+        # what to conclude, no evaluation, no urging to hurry or to continue. The
+        # only thing the world adds is the fact of the distance.
+        #
+        # `forms_held` is supplied by simulation.py and shown ONLY to a Lumis
+        # standing inside a base — a count of bodies indoors is not something that
+        # can be perceived from the surface.
+        is_carrying = bool(getattr(self, 'carrying', None))
+        carrying_section = ""
+        if is_carrying:
+            c = self.carrying
+            _dest_name = nearest_name if base_coords else None
+            if _dest_name is not None:
+                bx_, by_ = base_coords[_dest_name]
+                _dist = abs(self.position[0] - bx_) + abs(self.position[1] - by_)
+                dest_line = (
+                    f"The nearest base is {_dest_name} at (X={bx_}, Y={by_}), "
+                    f"distance {_dist}."
+                )
+            else:
+                dest_line = "Base location unavailable."
+            # === RUN 017-2: the involuntary move, returned to perception ===
+            # Set by simulation.py only when the night-homing reflex moved this
+            # Lumis while it was carrying. Deliberately a bare statement of fact:
+            # where it is now, and that it did not walk there. No explanation of
+            # the reflex, no mention of the base, no evaluation, and nothing about
+            # what to do with the information. Making an involuntary movement
+            # perceptible and steering what is concluded from it are separable,
+            # and only the first is intended. Cleared after one step so it does
+            # not become permanent background text.
+            homing_line = ""
+            if getattr(self, '_homing_note', ''):
+                homing_line = self._homing_note + "\n"
+                self._homing_note = ""
+            carrying_section = (
+                "=== YOU ARE CARRYING A FORM ===\n"
+                f"You are carrying the form of Lumis {c['id']} ({c['lumis_type']}), "
+                f"which you lifted at {tuple(c['position'])}.\n"
+                f"{dest_line}\n"
+                f"{homing_line}"
+                "While you are carrying, you can move or rest. You cannot do the "
+                "other things right now.\n"
+                "You may set it down inside a base. You may reflect on it "
+                "afterward, or not, as you wish.\n"
+            )
+
         # === NEARBY CORPSES (burial / recovery) ===
         corpse_section = ""
         can_recover_here = False
+        if is_carrying:
+            # RUN 017: no second carry. A Lumis already holding a form is not
+            # offered another, so the option never appears and cannot be chosen
+            # and then silently discarded.
+            nearby_corpses = None
         if nearby_corpses:
             lines = []
             for c in nearby_corpses:
@@ -849,6 +941,60 @@ Speak only of what is present in your state and surroundings above. There is no 
                 f"{self._recent_action_result}\n"
             )
 
+        # === RUN 017: the offered action list ===
+        # While carrying, the list itself narrows to `move` and `rest`. The mind
+        # is not asked to choose from options the world will then refuse: an
+        # offered action that cannot execute is precisely the shape that cost this
+        # project runs 014 through 016. If a narrowed Lumis names something else
+        # anyway, simulation.py suppresses it and records
+        # [ACTION_BLOCKED_CARRYING] — the suppression is never silent.
+        _ACT_MOVE = '- "move" with direction: "up", "down", "left", "right"'
+        _ACT_REST = ('- "rest": stop and recover energy using available light '
+                     '(only effective when light_level > 0.3)')
+        if is_carrying:
+            actions_section = "\n".join([_ACT_MOVE, _ACT_REST])
+            vocab_line = '"move", "rest"'
+        else:
+            _lines = [
+                _ACT_MOVE,
+                _ACT_REST,
+                ('- "shelter": dig into lunar regolith here (emergency use, reduces '
+                 'radiation damage to 1/4, immobilizes until flare ends)'),
+                '- "stay": remain here',
+                '- "observe": quietly watch a nearby Lumis',
+                ('- "greet": approach and say hello to a nearby Lumis. Costs no energy. '
+                 "If you're feeling good (valence high), this can make the other Lumis "
+                 'feel a bit better too, and builds familiarity with them — the '
+                 "foundation for closer bonds and reproduction. If you're feeling bad "
+                 '(valence low), greeting now may leave a negative impression on that '
+                 'Lumis. Either way, greeting is how Lumis come to recognize and '
+                 'remember each other as individuals, not just "another Lumis nearby".'),
+                '- "collect": gather energy from the environment',
+                '- "share": give some of your energy to a nearby Lumis',
+            ]
+            vocab_line = ('"stay", "move", "observe", "greet", "collect", "share", '
+                          '"rest", "shelter"')
+            if can_recover_here:
+                _lines.append(
+                    '- "carry": lift and bring in the form of a Lumis that has ended '
+                    'nearby, so it is not left alone on the surface. A quiet act of care.'
+                )
+                vocab_line += ', "carry"'
+            actions_section = "\n".join(_lines)
+
+        # === RUN 017: forms held in this base ===
+        # Shown only to a Lumis standing inside a base. Bodies delivered to a base
+        # accumulate there and are not consumed; nothing is reused until run 019,
+        # and the world may not describe what it cannot yet do. So this is a count
+        # and nothing else — no wording about return, renewal or continuation.
+        forms_held_line = ""
+        _held = getattr(self, '_forms_held_here', None)
+        if self.in_place and self.current_place and _held:
+            forms_held_line = (
+                f"\nFORMS HELD: {_held} form(s) of Lumis that have ended rest inside "
+                f"{self.current_place}.\n"
+            )
+
         prompt = f"""You are {self.display_name}.
 {role_desc}
 You exist on the lunar surface. You move only by intrinsic curiosity.
@@ -871,7 +1017,6 @@ position: ({self.position[0]}, {self.position[1]})
 local_density: {local_density} Lumis nearby
 boundary: X and Y must stay between -{self.half_space_size} and +{self.half_space_size}. You are {'near the edge, consider turning back' if abs(self.position[0]) > self.half_space_size * 0.8 or abs(self.position[1]) > self.half_space_size * 0.8 else 'within safe range'}.
 nearest base: {nearest_base}
-{f"HOME BASE: Your home base is {self.home_base}. You are free to explore anywhere, but return here when energy is low or to recover." if self.home_base else ""}
 === ENVIRONMENT ===
 light_level: {light_level}
 event: {event}{flare_warning}
@@ -884,22 +1029,15 @@ NOTE: Going outside during the day to photosynthesize gives the BEST energy reco
 === LUNAR BASES ===
 {chr(10).join(f"{name}: X={xy[0]}, Y={xy[1]}" + chr(10) + "  inside base: radiation=0, slow energy recovery (repair facilities), safe for reproduction and rest." for name, xy in base_coords.items()) if base_coords else "base locations unavailable"}
 NOTE: The base keeps you safe and slowly recovering, but going outside in daylight recovers energy faster.
-{emergency_section}
-{corpse_section}=== NEARBY LUMIS ===
+{forms_held_line}{emergency_section}
+{carrying_section}{corpse_section}=== NEARBY LUMIS ===
 {nearby_text}
 {result_section}
 === MEMORY ===
 {memory_text}
 {message_section}
 === AVAILABLE ACTIONS ===
-- "move" with direction: "up", "down", "left", "right"
-- "rest": stop and recover energy using available light (only effective when light_level > 0.3)
-- "shelter": dig into lunar regolith here (emergency use, reduces radiation damage to 1/4, immobilizes until flare ends)
-- "stay": remain here
-- "observe": quietly watch a nearby Lumis
-- "greet": approach and say hello to a nearby Lumis. Costs no energy. If you're feeling good (valence high), this can make the other Lumis feel a bit better too, and builds familiarity with them — the foundation for closer bonds and reproduction. If you're feeling bad (valence low), greeting now may leave a negative impression on that Lumis. Either way, greeting is how Lumis come to recognize and remember each other as individuals, not just "another Lumis nearby".
-- "collect": gather energy from the environment
-- "share": give some of your energy to a nearby Lumis{chr(10) + '- "carry": lift and bring in the form of a Lumis that has ended nearby, so it is not left alone on the surface. A quiet act of care.' if can_recover_here else ''}
+{actions_section}
 
 === RESPOND IN JSON ===
 Answer the fields in the order given. Each one is written before the next, so
@@ -913,7 +1051,8 @@ what you write earlier is in front of you when you write what comes later.
     "memory": "what you want to remember next step"
 }}
 
-Both "impulse" and "action" must be one of: "stay", "move", "observe", "greet", "collect", "share", "rest", "shelter"{', "carry"' if can_recover_here else ''}.
+Both "impulse" and "action" must be one of these words, and nothing else: {vocab_line}.
+Never put a direction ("up", "down", "left", "right") in "impulse" or "action" — a direction is not an action. If you want to go somewhere, the action is "move" and the direction goes in the "direction" field.
 Your "action" is what you will do. Your "impulse" is only what came first.
 
 Step: {step}
@@ -1073,19 +1212,94 @@ Step: {step}
             "reasoning": reasoning
         }
     
+    # The eight actions the simulation can actually execute. Anything else that
+    # arrives in an action field is not a choice — it is a malformed response
+    # that would otherwise fall through every dispatch branch in
+    # simulation.py and do nothing, while being recorded as though the Lumis
+    # had chosen it.
+    VALID_ACTIONS = frozenset({
+        "stay", "move", "observe", "greet", "collect", "share", "rest",
+        "shelter", "carry",
+    })
+
+    # Direction words are the specific failure seen in run 016 preflight:
+    # llama3.2, now asked for two action fields (impulse and action) plus a
+    # direction, put the direction value in the action field. About 10% of
+    # decisions in a preflight sample. These are recoverable: the intent is
+    # plainly to move, so they are read as "move" with that direction, rather
+    # than discarded.
+    DIRECTION_WORDS = {
+        "up": "up", "down": "down", "left": "left", "right": "right",
+        "north": "up", "south": "down", "west": "left", "east": "right",
+    }
+
+    # RUN 017 (016 item 3): words that plainly mean "move" but are not one of the
+    # eight. Kept to `explore` alone — it accounts for 146 of run 016's 160 lost
+    # decisions and is a word the prompt itself uses ("wander freely, and
+    # explore"). The other four losses (`follow` 7, `check` 3, `approach` 2,
+    # `check_energy` 1) are NOT included: each could plausibly mean something
+    # other than move, and guessing at intent is how run 015-3 fabricated eight
+    # burials. They stay [ACTION_INVALID] and stay counted.
+    MOVE_INTENT_WORDS = frozenset({"explore"})
+
+    def _validate_action(self, action, direction, field_name):
+        """Return (action, direction), repairing or rejecting invalid actions.
+
+        Never returns something simulation.py cannot dispatch. Every repair and
+        every rejection is logged: an action that silently becomes a no-op is
+        exactly the failure mode that cost runs 014 through 015-3.
+        """
+        if action is None:
+            return None, direction
+        a = str(action).strip().lower()
+        if a in self.VALID_ACTIONS:
+            return a, direction
+        if a in self.DIRECTION_WORDS:
+            fixed = self.DIRECTION_WORDS[a]
+            logger.info(
+                f"Agent {self.id}: [ACTION_WAS_DIRECTION] {field_name}={action!r} is a "
+                f"direction, not an action; reading as move/{fixed}. The model put the "
+                f"direction in the action field."
+            )
+            return "move", (direction or fixed)
+        if a in self.MOVE_INTENT_WORDS:
+            # RUN 017 (016 item 3). In 016, `explore` was emitted 146 times and
+            # discarded as invalid, defaulting the agent to `stay` — 91% of all
+            # decisions lost that run. The prompt's own LIFE section tells them to
+            # "wander freely, and explore", so the word was supplied by us and then
+            # refused by us. It is unambiguously an intention to move and is now
+            # read as one. Logged distinctly so the repair can be counted and its
+            # effect on the distribution separated from anything else.
+            logger.info(
+                f"Agent {self.id}: [ACTION_WAS_MOVE_INTENT] {field_name}={action!r} is a "
+                f"movement intention, not one of the eight; reading as move. "
+                f"Recovered rather than lost (run 016 discarded 146 of these)."
+            )
+            return "move", direction
+        logger.info(
+            f"Agent {self.id}: [ACTION_INVALID] {field_name}={action!r} is not one of "
+            f"{sorted(self.VALID_ACTIONS)}; defaulting to 'stay'. This decision is LOST."
+        )
+        return "stay", direction
+
     def parse_action_response(self, response: str) -> ActionDecision:
         """Parse LLM response and extract action decision"""
         parsed = self._parse_json_object(response, log_context=f"parse_action_response(agent={self.id})")
         if parsed is not None:
             action = parsed.get("action", "stay")
             impulse = parsed.get("impulse")
+            direction = parsed.get("direction")
+            action, direction = self._validate_action(action, direction, "action")
+            impulse, _ = self._validate_action(impulse, None, "impulse")
             # Run 016's central measurement. The prompt asks for the impulse
             # first, then the reasoning, then the action, so that the
             # deliberation is generated before the choice and can condition it.
             # Where impulse and action differ, something written between them
             # changed what was selected. Logged at the moment it happens rather
             # than reconstructed later, because the whole question of this run is
-            # how often it happens at all.
+            # how often it happens at all. Compared AFTER validation, so that a
+            # direction word landing in one field and not the other is not
+            # mistaken for deliberation changing its mind.
             if impulse and impulse != action:
                 logger.info(
                     f"Step -: [DELIBERATION_CHANGED] Agent {self.id}: "
@@ -1094,7 +1308,7 @@ Step: {step}
             return {
                 "action": action,
                 "impulse": impulse,
-                "direction": parsed.get("direction"),
+                "direction": direction,
                 "memory": parsed.get("memory", ""),
                 "reasoning": parsed.get("reasoning", "")
             }
@@ -1125,8 +1339,9 @@ Step: {step}
         # --- 1. the deliberated choice, salvaged from truncated JSON
         m = re.search(r'"action"\s*:\s*"([a-z_]+)"', response, re.I)
         if m:
-            action = m.group(1).lower()
-            if action == "move":
+            action, direction = self._validate_action(m.group(1), None, "action")
+            impulse, _ = self._validate_action(impulse, None, "impulse")
+            if action == "move" and direction is None:
                 direction = self._extract_direction_from_text(response)
             logger.info(
                 f"Agent {self.id}: [FALLBACK_FIELD] JSON malformed but the action "
@@ -1146,7 +1361,8 @@ Step: {step}
         #        Tagged distinctly: this is the pre-deliberation reach, and must
         #        never be counted as a deliberated choice.
         if impulse:
-            if impulse == "move":
+            impulse, direction = self._validate_action(impulse, None, "impulse")
+            if impulse == "move" and direction is None:
                 direction = self._extract_direction_from_text(response)
             logger.info(
                 f"Agent {self.id}: [FALLBACK_IMPULSE_ONLY] response was cut off before "

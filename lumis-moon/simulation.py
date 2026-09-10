@@ -192,6 +192,16 @@ class Simulation:
         # undertakers, but a corpse left too long becomes recoverable by anyone
         # (CORPSE_OPEN_TO_ALL_AFTER steps), so no one is left unretrieved.
         self.corpses: List[Dict] = []
+
+        # RUN 017: forms delivered to a base. A body picked up leaves self.corpses
+        # (it is held by its carrier) and, on arrival, is appended here under the
+        # base's name. Bodies accumulate and are NOT consumed: nothing is reused
+        # until run 019, and the world may not offer what it cannot yet deliver.
+        # A count is shown to Lumis standing inside that base, and nothing more —
+        # no wording about return or renewal, which is reserved for 019.
+        self.forms_held: Dict[str, List[Dict]] = {
+            place['name']: [] for place in self.places
+        }
         self.step = 0
         self.history: List[Dict] = []
         
@@ -477,9 +487,12 @@ class Simulation:
                 lumis_type=lumis_type,
                 num_large=self.num_large
             )
-            # Assign home base for large Lumis (L0 → base_alpha, L1 → base_beta)
-            if lumis_type == "large":
-                agent.home_base = base['name']
+            # RUN 017: the `home_base` assignment that used to sit here has been
+            # removed. See the note in agent.py's __init__: it was only ever set
+            # for the four founding large Lumis, was never inherited at birth, and
+            # encoded a permanent two-base world as an agent attribute. A carried
+            # body now goes to the NEAREST base, which is what the night-homing
+            # reflex has always used.
             # Randomize birth_step for initial agents to prevent synchronized reproduction bursts.
             # Spread across the full maturity window (60 steps).
             import random as _random
@@ -490,6 +503,163 @@ class Simulation:
 
         logger.info("Agents initialized successfully")
     
+    def _nearest_base_for(self, position) -> Tuple[Optional[str], int]:
+        """RUN 017: the base a carried body is bound for, and how far it is.
+
+        Nearest base, by the same Manhattan measure the night-homing reflex uses,
+        so that reflex and intention point the same way. If it were anything else
+        — a "home" base, say — night would pull a carrier back the way it came and
+        silently abort the journey, which is this project's recurring failure
+        shape in a new place.
+        """
+        best_name, best_dist = None, None
+        for place in self.places:
+            d = (abs(position[0] - place['center_x'])
+                 + abs(position[1] - place['center_y']))
+            if best_dist is None or d < best_dist:
+                best_name, best_dist = place['name'], d
+        return best_name, (best_dist if best_dist is not None else -1)
+
+    def _begin_carry(self, agent: Agent, corpse: Dict) -> None:
+        """RUN 017: lift a body. It leaves the surface but is NOT delivered.
+
+        Until 016 the whole of `carry` was `self.corpses.remove(corpse)`: no
+        transport, no destination, no storage. The body vanished and that was
+        called a burial, while the code's own log line said "carried in from the
+        surface", the prayer said "we have come to receive your body", and the
+        Lumis themselves wrote "carry it back to base_alpha for safekeeping". The
+        world was describing a place it did not contain.
+
+        The body is now held. It is removed from `self.corpses` so it is not
+        offered to anyone else while in transit, and the prayer and the [BURIAL]
+        record are withheld until arrival, because until then nothing has been
+        received.
+
+        A separate method so the path can actually be executed by preflight_017.
+        014's dead `share` passed py_compile and ast.parse and never ran once.
+        """
+        self.corpses.remove(corpse)
+        agent.carrying = corpse
+        agent.carry_start_step = self.step
+        agent.carry_start_pos = tuple(agent.position)
+        agent.carry_steps = 0
+        agent._carry_counted_step = -1
+        agent.carry_path_length = 0
+        dest_name, dest_dist = self._nearest_base_for(agent.position)
+        logger.info(
+            f"Step {self.step}: [CARRY_START] {agent.display_name} "
+            f"({agent.lumis_type}) lifted the form of Lumis {corpse['id']} "
+            f"({corpse['lumis_type']}) at {tuple(corpse['position'])}; "
+            f"carrier at {tuple(agent.position)}; nearest base {dest_name} "
+            f"at distance {dest_dist}. Bodies on surface: {len(self.corpses)}."
+        )
+
+    def _deliver_carried_bodies(self) -> None:
+        """RUN 017: set down any carried body whose carrier is now inside a base.
+
+        Called after every movement this step has resolved (the chosen move, the
+        homing reflex, a capacity eviction), so arrival is judged on where the
+        carrier actually ended up. Anywhere inside the base square counts — the
+        same test the homing reflex uses for "arrived home".
+        """
+        for agent in self.agents:
+            corpse = getattr(agent, 'carrying', None)
+            if not corpse:
+                continue
+            # RUN 017-2: this method is now called twice per step (after the
+            # reflex and after the chosen action), so the step counter is guarded
+            # to advance once. Without this, every carried step would be counted
+            # twice and every published journey length would be doubled.
+            if getattr(agent, '_carry_counted_step', -1) != self.step:
+                agent._carry_counted_step = self.step
+                agent.carry_steps += 1
+            place = get_place_at_position(agent.position, self.places)
+            if place is None:
+                continue
+            base_name = place['name']
+            record = dict(corpse)
+            record['delivered_step'] = self.step
+            record['delivered_by'] = agent.id
+            self.forms_held.setdefault(base_name, []).append(record)
+            travelled = (
+                abs(agent.position[0] - agent.carry_start_pos[0])
+                + abs(agent.position[1] - agent.carry_start_pos[1])
+            ) if agent.carry_start_pos else -1
+            # The burial prayer, held back until now. Offered to the carrier as a
+            # completed act it may then choose to reflect on, or not.
+            prayer = (
+                f"We have already received your mind and your heart. "
+                f"Now we have come to receive your body. "
+                f"(Lumis {corpse['id']}, carried in from the surface.)"
+            )
+            agent._recent_burial_note = prayer
+            logger.info(
+                f"Step {self.step}: [BURIAL] {agent.display_name} brought in the form "
+                f"of Lumis {corpse['id']} ({corpse['lumis_type']}) to {base_name}. "
+                f"Bodies on surface: {len(self.corpses)}."
+            )
+            logger.info(
+                f"Step {self.step}: [CARRY_DELIVERED] {agent.display_name} "
+                f"({agent.lumis_type}) delivered Lumis {corpse['id']} to {base_name} "
+                f"at {tuple(agent.position)}; lifted at {agent.carry_start_pos} on step "
+                f"{agent.carry_start_step}; steps carried {agent.carry_steps}; "
+                f"net distance {travelled}; forms held in {base_name}: "
+                f"{len(self.forms_held[base_name])}."
+            )
+            agent.carrying = None
+            agent.carry_start_step = -1
+            agent.carry_start_pos = None
+            agent.carry_steps = 0
+            agent.carry_path_length = 0
+
+    def _abandon_carry_on_death(self, dead: Agent) -> None:
+        """RUN 017: a Lumis ended while carrying. Both forms remain on the surface.
+
+        No special handling: the body it was carrying is set down where the
+        journey stopped and becomes recoverable again on the same terms as any
+        other. This is the first time in the project a Lumis can end while
+        carrying another, and the decision is to observe it rather than design
+        around it.
+        """
+        held = getattr(dead, 'carrying', None)
+        if not held:
+            return
+        dest_name, dest_dist = self._nearest_base_for(dead.position)
+        held = dict(held)
+        held['position'] = tuple(dead.position)
+        held['abandoned_step'] = self.step
+        self.corpses.append(held)
+        logger.info(
+            f"Step {self.step}: [CARRY_ABANDONED_DEATH] {dead.display_name} "
+            f"({dead.lumis_type}) ended at {tuple(dead.position)} while carrying "
+            f"the form of Lumis {held['id']}; both forms now rest at "
+            f"{tuple(dead.position)}. Lifted at {dead.carry_start_pos} on step "
+            f"{dead.carry_start_step}; steps carried {dead.carry_steps}; "
+            f"{dest_dist} remaining to {dest_name}."
+        )
+        dead.carrying = None
+
+    def get_visible_corpses(self) -> List[Dict]:
+        """RUN 017: bodies that should appear on the map this step.
+
+        Bodies lying on the surface, plus bodies currently being carried, drawn at
+        their carrier's position so they travel with them. A body in transit is
+        still an unburied body, and the standing decision from 016 is that the
+        fact of a body not yet gathered has to stay visible.
+
+        Bodies delivered into a base are NOT drawn: they are indoors, the count
+        shown to Lumis inside that base is the record of them, and a growing pile
+        of dots inside the base square would sit on top of the living.
+        """
+        visible = list(self.corpses)
+        for agent in self.agents:
+            c = getattr(agent, 'carrying', None)
+            if c:
+                held = dict(c)
+                held['position'] = tuple(agent.position)
+                visible.append(held)
+        return visible
+
     def get_agents_in_place(self, place_name: Optional[str] = None) -> List[Agent]:
         """Get list of agents currently in a specific place or any place"""
         if place_name:
@@ -762,6 +932,13 @@ class Simulation:
                 f"Step {self.step}: [CORPSE] {dead.display_name}'s body remains at "
                 f"{tuple(dead.position)}, awaiting recovery."
             )
+            # RUN 017: if this Lumis ended while carrying, BOTH forms remain on
+            # the surface where it fell. No special handling — the body it was
+            # carrying is simply set down where the journey stopped, and becomes
+            # recoverable again on the same terms as any other. This is the first
+            # time in the project a Lumis can end while carrying another, and the
+            # design decision is to observe it rather than design around it.
+            self._abandon_carry_on_death(dead)
             self.agents.remove(dead)
 
         # Check for total extinction
@@ -799,6 +976,20 @@ class Simulation:
                 age_since_death = self.step - corpse['death_step']
                 if (agent.lumis_type == 'large') or (age_since_death >= CORPSE_OPEN_TO_ALL_AFTER):
                     nearby_corpses.append(corpse)
+            # RUN 017: a Lumis already carrying is not offered another body (no
+            # second carry). agent.py also blanks nearby_corpses in that case;
+            # doing it here as well keeps [CORPSE_PROMPT] honest — the section is
+            # never logged as shown when it was not shown.
+            if getattr(agent, 'carrying', None):
+                nearby_corpses = []
+            # RUN 017: how many forms rest inside the base this agent is standing
+            # in. Passed as an attribute (same pattern as _active_flare) so no
+            # signature changes. None/0 when outside, so the line never appears on
+            # the surface.
+            agent._forms_held_here = (
+                len(self.forms_held.get(agent.current_place, []))
+                if (agent.in_place and agent.current_place) else 0
+            )
             action_decision = agent.decide_action(
                 agent_place_status, nearby_agents, self.step, recent_intro,
                 fire_info=fire_info, nearby_corpses=nearby_corpses
@@ -815,7 +1006,16 @@ class Simulation:
                 # choice so that "did thinking change anything" is answerable
                 # from this file alone, without re-deriving it from the log.
                 "impulse": action_decision.get('impulse'),
-                "action": action_decision.get('action')
+                "action": action_decision.get('action'),
+                # Run 017: the id of the body this agent is carrying as it makes
+                # this decision, or null. One field, every record, so the whole
+                # journey — every step of it — is re-derivable from this file
+                # alone without touching the log. 016's [DELIBERATION_CHANGED]
+                # tag undercounted by 156 and only the jsonl was trustworthy:
+                # put the thing that must be right in the jsonl.
+                "carrying": (
+                    agent.carrying['id'] if getattr(agent, 'carrying', None) else None
+                )
             })
 
             # OBSERVATION-ONLY (run 015): if this agent was moved by the homing
@@ -1113,6 +1313,43 @@ class Simulation:
                 # prompt text, no action, and no valence.
                 if tuple(agent.position) != homing_pos_before:
                     agent._homed_last_step = self.step
+                    # === RUN 017-2: the one variable ===
+                    # Run 017 established that all 24 distance deliveries had this
+                    # reflex fire during the carry, and that no Lumis ever steered
+                    # a body to a base itself. But a carrier was never told it had
+                    # been moved: it lifted a form, walked away from the base all
+                    # day, was carried back at night without perceiving it, and
+                    # in some cases arrived. "It did not go there" was measured on
+                    # a mind that did not know where it had been taken.
+                    #
+                    # This is the 015-4 shape again. That run's zero measured our
+                    # response template, not the Lumis. Run 016 changed one field
+                    # order and the zero became 65. So 017-2 changes exactly one
+                    # thing: a Lumis that is CARRYING is told, the next step, that
+                    # it woke somewhere it did not walk to.
+                    #
+                    # Only carriers. Returning this to everyone would add ~12,000
+                    # lines of night text to the prompt stream and bury the signal
+                    # (the original run-015 reasoning, unchanged and still sound);
+                    # during a carry it fired about 200 times in 017.
+                    if getattr(agent, 'carrying', None):
+                        agent._homing_note = (
+                            f"During the night you found yourself at "
+                            f"{tuple(agent.position)}. You did not walk there."
+                        )
+                        logger.info(
+                            f"Step {self.step}: [HOMING_RETURNED] {agent.display_name} "
+                            f"({agent.lumis_type}) carrying Lumis "
+                            f"{agent.carrying['id']}; involuntary move "
+                            f"{homing_pos_before} -> {tuple(agent.position)} WILL BE "
+                            f"returned to perception next step."
+                        )
+                    else:
+                        logger.info(
+                            f"Step {self.step}: [HOMING_WITHHELD] {agent.display_name} "
+                            f"({agent.lumis_type}) not carrying; involuntary move not "
+                            f"returned to perception."
+                        )
                     logger.info(
                         f"Step {self.step}: [HOMING_MOVED] {agent.display_name} "
                         f"({agent.lumis_type}) {homing_pos_before} → {tuple(agent.position)} "
@@ -1122,6 +1359,22 @@ class Simulation:
                     f"Step {self.step}: [REFLEX] {agent.display_name} heads home for the night "
                     f"(dist={min_dist}, steps_left_tonight={steps_left_tonight}, moves={moves_needed})"
                 )
+
+        # === RUN 017-2: arrival is also checked HERE, after the reflex ===
+        # Defect found in 017 and recorded 2026-08-28. The delivery check ran once
+        # per step, after the chosen action. But the order within a step is
+        # reflex -> chosen action -> delivery check, so a carrier that the reflex
+        # brought INTO a base and that then stepped back out on its own was never
+        # seen inside it. S243 did exactly this on four consecutive nights,
+        # steps 627-630, each time standing at (20,-15) inside base_beta between
+        # two phases and never once being checked there.
+        #
+        # A body that reaches a base has reached it, whichever phase put it there.
+        # Some part of 017's "did not arrive" is "arrived and was not looked at",
+        # so 017's not-delivered count is an overcount by an unknown amount. This
+        # is a repair of a broken instrument, not a second variable, but it does
+        # mean 017 and 017-2 are not comparable on the not-delivered figure.
+        self._deliver_carried_bodies()
 
         # 生後30step以内の子供は昼夜問わず基地内待機（メンテナンス期間）
         (ax, ay), (bx, by) = self.base_centers
@@ -1189,20 +1442,74 @@ class Simulation:
                     else SEXUAL_PREP_LARGE
                 )
                 in_rearing = (agent.lumis_type == "large" and self.step >= rearing_start)
+                # RUN 017 (016 item 1). The guard itself is unchanged and stays —
+                # the designer's decision, recorded 2026-08-19: reproduction takes
+                # priority over burial, another Lumis can carry the body, and the
+                # agent may try again after giving birth (S133 did, one step
+                # later). What changes is ONLY that the discarded choice is now
+                # recorded. In 016, 21 `carry` declarations died here leaving no
+                # trace, because both [BURIAL] and [CARRY_NO_BODY] live inside a
+                # branch this agent never reaches. A guard placed to catch silence
+                # had a silence behind it. Nothing logs its own absence.
+                _blocked = action_decision.get('action', 'stay')
                 if in_rearing:
                     # 基地内移動のみ許可
                     action = action_decision['action']
+                    _executed = False
                     if action == 'move' and action_decision['direction']:
                         # 移動先が基地外になる場合は無効化
                         dx, dy = {'up': (0,1), 'down': (0,-1), 'left': (-1,0), 'right': (1,0)}.get(action_decision['direction'], (0,0))
                         new_pos = (agent.position[0] + dx, agent.position[1] + dy)
                         if get_place_at_position(new_pos, self.places) is not None:
                             agent.move(action_decision['direction'])
+                            _executed = True
+                    if not _executed:
+                        logger.info(
+                            f"Step {self.step}: [ACTION_BLOCKED_REARING] "
+                            f"{agent.display_name} ({agent.lumis_type}) chose "
+                            f"{_blocked!r} at {tuple(agent.position)}; suppressed by "
+                            f"the rearing guard (in-base movement only). "
+                            f"type={agent.reproduction_type}, "
+                            f"started={agent.reproduction_start_step}"
+                        )
                     continue
                 else:
+                    logger.info(
+                        f"Step {self.step}: [ACTION_BLOCKED_REARING] "
+                        f"{agent.display_name} ({agent.lumis_type}) chose "
+                        f"{_blocked!r} at {tuple(agent.position)}; suppressed by the "
+                        f"reproduction-prep guard (no action permitted). "
+                        f"type={agent.reproduction_type}, "
+                        f"started={agent.reproduction_start_step}"
+                    )
                     continue  # 出産準備中は全行動不可
 
             action = action_decision['action']
+
+            # === RUN 017: the carrying state narrows the mind to move / rest ===
+            # A Lumis holding a form can travel or stand still, and nothing else.
+            # The REFLEX LAYER IS UNTOUCHED — flare sheltering (Phase 1.5) and
+            # night homing both still fire for a carrier, automatically, so a
+            # Lumis cannot die of this. What is narrowed is deliberation, not
+            # protection.
+            #
+            # The prompt already offers only move and rest while carrying, so
+            # anything else arriving here is the model naming an option it was not
+            # given. That is exactly the case that must not vanish: this is the
+            # FOURTH mechanism in this project that discards a chosen action
+            # (share/014, the return path/015, the rearing guard/016), and the
+            # first three were each discovered only after a run was spent. The tag
+            # is built at the same time as the restriction, not after.
+            if getattr(agent, 'carrying', None) and action not in ('move', 'rest'):
+                logger.info(
+                    f"Step {self.step}: [ACTION_BLOCKED_CARRYING] "
+                    f"{agent.display_name} ({agent.lumis_type}) chose {action!r} at "
+                    f"{tuple(agent.position)} while carrying the form of Lumis "
+                    f"{agent.carrying['id']}; suppressed. Permitted: move, rest. "
+                    f"Treated as: rest."
+                )
+                action = 'rest'
+
             agent.is_resting = False  # デフォルトはFalse、restの時のみTrueにする
             if action == 'shelter':
                 agent.is_sheltering = True
@@ -1267,20 +1574,25 @@ class Simulation:
                         recoverable,
                         key=lambda c: abs(agent.position[0] - c['position'][0]) + abs(agent.position[1] - c['position'][1])
                     )
-                    self.corpses.remove(corpse)
-                    # The burial prayer — offered to the agent as a completed act it may
-                    # then choose to reflect on (or not) during introspection.
-                    prayer = (
-                        f"We have already received your mind and your heart. "
-                        f"Now we have come to receive your body. "
-                        f"(Lumis {corpse['id']}, carried in from the surface.)"
-                    )
-                    agent._recent_burial_note = prayer
-                    logger.info(
-                        f"Step {self.step}: [BURIAL] {agent.display_name} recovered the body of "
-                        f"Lumis {corpse['id']} ({corpse['lumis_type']}) at {corpse['position']}. "
-                        f"Corpses remaining: {len(self.corpses)}."
-                    )
+                    # === RUN 017: `carry` no longer resolves instantly ===
+                    # Until 016 this branch was `self.corpses.remove(corpse)` and
+                    # nothing else: no transport, no destination, no storage. The
+                    # code's own log said "carried in from the surface", the
+                    # prayer said "we have come to receive your body", and the
+                    # Lumis themselves wrote "carry it back to base_alpha for
+                    # safekeeping" — all describing a place that did not exist.
+                    # The world was telling its residents something untrue.
+                    #
+                    # The body is now LIFTED and held. It leaves the surface (so
+                    # it is not offered to anyone else while in transit) but it is
+                    # not delivered: the carrier has to travel. The prayer and the
+                    # [BURIAL] record are withheld until arrival, because until
+                    # then nothing has been received.
+                    self._begin_carry(agent, corpse)
+                    # Arrival is checked after all movement this step (see
+                    # _deliver_carried_bodies), so a body lifted while already
+                    # inside a base is delivered immediately rather than waiting a
+                    # step for nothing.
                 else:
                     # OBSERVATION-ONLY (run 015, external audit): the same shape as the
                     # 014 `share` defect — an act chosen and then silently producing
@@ -1344,6 +1656,14 @@ class Simulation:
         # Update states after movement
         for agent in self.agents:
             agent.update_state(self.places)
+
+        # === RUN 017: delivery ===
+        # Checked after every movement this step has resolved (the chosen move,
+        # the homing reflex, a capacity eviction), so arrival is judged on where
+        # the carrier actually ended up. Anywhere inside the base square counts —
+        # the same test the homing reflex uses for "arrived home". A body lifted
+        # while already inside a base is delivered on the same step.
+        self._deliver_carried_bodies()
 
         # === RUN 015: assemble the return-path record ===
         # Written in the plainest terms available: which action the mind selected,
@@ -1466,7 +1786,19 @@ class Simulation:
                 if pair_key in communed_pairs:
                     continue
                 # 同じ基地かどうか判定
-                same_base = (agent.home_base == partner.home_base)
+                # RUN 017: this used to compare `home_base`, which was only ever
+                # assigned to the four founding large Lumis and never inherited.
+                # Every large Lumis born during a run therefore had home_base
+                # None, so `None == None` made every such pair read as same-base
+                # and commune every step instead of every thirty — an inter-base
+                # channel silently reclassified as intra-base. It now asks the
+                # question it was always meant to ask: are these two actually
+                # inside the same base right now?
+                same_base = (
+                    agent.in_place and partner.in_place
+                    and agent.current_place is not None
+                    and agent.current_place == partner.current_place
+                )
                 # 基地内：毎step、基地間：30stepごと
                 if same_base or (self.step % 30 == 0):
                     communed_pairs.add(pair_key)

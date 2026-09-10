@@ -20,6 +20,19 @@ NON_GUI_BACKENDS = ['agg', 'pdf', 'svg', 'ps']
 FIGURE_SIZE = (10, 10)
 STATS_FIGURE_SIZE = (12, 8)
 DPI = 150
+
+# RUN 017-2 (video stability). The lunar-surface axes are pinned to this
+# rectangle in figure coordinates (left, bottom, width, height) on every frame,
+# rather than being positioned by tight_layout(). The title changes length as
+# lunar night and solar flares come and go and as the population moves, and
+# letting the layout respond to that made the plotted surface grow and shrink
+# from frame to frame -- invisible in a single PNG, very visible as jitter once
+# the frames are assembled into a video.
+#
+# Top margin is generous because the title is the thing that varies: it can wrap
+# to two lines without pushing on the plot. Right margin leaves room for the
+# colorbar that make_axes_locatable appends.
+PLOT_RECT = (0.07, 0.06, 0.80, 0.84)
 INITIAL_WINDOW_DELAY = 0.5
 VISUALIZATION_PAUSE = 0.05
 STATS_PAUSE = 0.1
@@ -108,6 +121,11 @@ class Visualizer:
         if reuse_existing and self.fig is not None:
             # Clear existing figure instead of creating new one
             self.ax.clear()
+            # RUN 017-2: the colorbar now lives in its own fixed axes added with
+            # fig.add_axes, so on a reused figure it must be removed or a new one
+            # is stacked on top every frame. ax.clear() only clears the main axes.
+            for _extra in [a for a in self.fig.axes if a is not self.ax]:
+                _extra.remove()
         else:
             # Create new figure
             self.fig, self.ax = plt.subplots(figsize=FIGURE_SIZE)
@@ -531,17 +549,46 @@ class Visualizer:
         # Record current agent positions for next step comparison
         self._prev_agent_positions = {a.id: a.position for a in agents}
 
-        # Draw corpses: black dots at the place of death, persisting until a Lumis
-        # recovers the body. This is the visual counterpart to the burial mechanic —
-        # a body left on the surface stays visible so its recovery (or its waiting)
-        # can be seen.
+        # Draw corpses: gray dots at the place of death, persisting until a Lumis
+        # recovers the body. The color fades with time since death — a freshly fallen
+        # body is a medium gray, and it pales gradually toward a soft light gray as the
+        # steps pass, as if settling quietly back into the surface. It never fades to
+        # nothing: an unrecovered body stays faintly visible, because the fact of it
+        # remaining is exactly what the burial mechanic is about. (Changed from a flat
+        # black marker: a screen full of hard black dots that never leave is heavier to
+        # watch than the mechanic intends, and the fade also lets you read at a glance
+        # how long each body has waited.)
         if corpses:
-            cx = [c['position'][0] for c in corpses]
-            cy = [c['position'][1] for c in corpses]
+            cx, cy, colors = [], [], []
+            FADE_OVER = 120.0   # steps across which a body pales from fresh to old
+            # The pale end used to be 0.78, chosen to look like the body settling
+            # back into the surface. It settled too far: the daytime background is
+            # #d0ccc0, luminance 0.79, so a fully aged body differed from the ground
+            # by about 2 levels out of 255 and became invisible in daylight. In run
+            # 015-R that hid 19 of 39 bodies -- roughly half the dead -- during every
+            # day phase, which is precisely the fact this marker exists to show.
+            # The pale end is now 0.55: still a visible paling, still reads as age,
+            # but it keeps contrast against BOTH the pale day surface (about 61/255)
+            # and the black night sky (about 140/255). Age past that point is carried
+            # by the outline thinning instead of by the body disappearing.
+            FADE_TO = 0.55
+            for c in corpses:
+                cx.append(c['position'][0])
+                cy.append(c['position'][1])
+                age = max(0, step - c.get('death_step', step))
+                t = min(1.0, age / FADE_OVER)   # 0 = just died, 1 = fully aged
+                level = 0.33 + t * (FADE_TO - 0.33)
+                colors.append((level, level, level))
+            # Edge slightly darker than fill for a soft outline, also age-dependent.
+            edge_colors = [(max(0.0, lv - 0.18),) * 3 for (lv, _, _) in colors]
+            edge_widths = [
+                1.0 - 0.5 * min(1.0, max(0, step - c.get('death_step', step)) / FADE_OVER)
+                for c in corpses
+            ]
             self.ax.scatter(
                 cx, cy,
-                marker='o', s=70, color='#000000',
-                edgecolors='#444444', linewidths=1.0, zorder=9
+                marker='o', s=70, c=colors,
+                edgecolors=edge_colors, linewidths=edge_widths, zorder=9
             )
         
         # Build title with statistics for all places
@@ -607,6 +654,19 @@ class Visualizer:
             title += f" | ☀ SOLAR FLARE ({flare_name})"
         self.ax.set_title(title, fontsize=11, fontweight='bold', color='lightgray')
 
+        # RUN 017-2 (video stability). The title changes length from frame to
+        # frame -- " | LUNAR NIGHT" and " | SOLAR FLARE (name)" come and go, and
+        # the per-place statistics change width as the population moves. With
+        # tight_layout() and bbox_inches='tight' the plot area was recomputed from
+        # whatever happened to be drawn, so the lunar surface grew and shrank
+        # between frames and the finished video jittered.
+        #
+        # The plot rectangle is now pinned to fixed figure coordinates and the
+        # title is wrapped rather than allowed to widen the frame. Nothing about
+        # the simulation changes; this is the video only.
+        self.ax.set_position(PLOT_RECT)
+        self.ax.title.set_wrap(True)
+
         # Legend: Lumis style
         from matplotlib.lines import Line2D
         legend_elements = [
@@ -640,24 +700,39 @@ class Visualizer:
         legend = self.ax.legend(handles=legend_elements, loc='upper right', fontsize=8,
                                 facecolor='#1a1a2e', labelcolor='lightgray', edgecolor='gray')
 
-        # Add fire intensity colorbar on the right side (always 0-1 range, shown from step 0)
-        # Use make_axes_locatable to match colorbar height exactly to the plot's y-axis
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        # Fire intensity colorbar on the right side (always 0-1 range, from step 0)
+        # RUN 017-2 (video stability). This used make_axes_locatable to match the
+        # colorbar height to the plot's y-axis. That works, but append_axes
+        # installs an axes locator on the main axes which recomputes its position
+        # on every draw and silently overrides set_position(PLOT_RECT) -- so the
+        # frame would still have moved. The colorbar axes is now placed at a
+        # fixed rectangle computed from PLOT_RECT, which matches the plot height
+        # exactly by construction and cannot drift between frames.
         fire_cmap = matplotlib.colormaps['YlOrRd']
         norm = mcolors.Normalize(vmin=0.0, vmax=1.0)
         sm = plt.cm.ScalarMappable(cmap=fire_cmap, norm=norm)
         sm.set_array([])
-        divider = make_axes_locatable(self.ax)
-        cax = divider.append_axes("right", size="3%", pad=0.1)
+        _l, _b, _w, _h = PLOT_RECT
+        cax = self.fig.add_axes([_l + _w + 0.015, _b, 0.025, _h])
         cbar = self.fig.colorbar(sm, cax=cax)
         cbar.set_label('Lunar Night Intensity', fontsize=10, color='lightgray')
         cbar.ax.yaxis.set_tick_params(color='lightgray')
         plt.setp(cbar.ax.yaxis.get_ticklabels(), color='lightgray')
 
-        plt.tight_layout()
+        # RUN 017-2 (video stability). tight_layout() removed here: it
+        # recomputed the plot position from the title height on every frame.
+        # The axes rectangle is pinned in set_position(PLOT_RECT) above
+        # instead. The statistics plot further down still uses it -- that is
+        # a single image, not a video frame, so nothing there can jitter.
 
         if save_path:
-            plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+            # bbox_inches='tight' removed: it cropped each PNG to whatever
+            # was actually drawn, so a frame with a longer title came out a
+            # different pixel size from one with a shorter title, and the
+            # assembled video jittered. Every frame is now exactly
+            # FIGURE_SIZE * DPI pixels.
+            plt.savefig(save_path, dpi=DPI,
+                        facecolor=self.fig.get_facecolor())
             # Close figure after saving to prevent memory leak
             plt.close(self.fig)
             self.fig = None
