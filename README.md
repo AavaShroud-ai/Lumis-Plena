@@ -80,7 +80,12 @@ The letters are meant to be checkable, not taken on trust.
   world with reasoning placed before choosing (65 burials). 015-4 was cut short at
   step 471 by an overnight Windows update and has no summary plot; 016 carries a
   note on which figures must be re-derived from the raw traces rather than trusted
-  from the log tags.
+  from the log tags. Runs **017** and **017-2** close the first generation, again
+  seed-pinned to 016: 017 gives carrying a destination and a journey cost, and
+  017-2 tells a carrier when the night reflex has moved it. 017-2 also carries a
+  repair to the arrival check, so the two are **not** comparable on the
+  not-delivered count — that limitation, and two claims withdrawn during analysis,
+  are recorded in the integrity log rather than quietly removed.
 
 ---
 
@@ -93,18 +98,23 @@ This project is a work in progress.
 | Lumis (lunar simulation) | Active development |
 | Experiment A — aging + lifespan + reproduction | Runs 008–015-4 complete (013 = first on doubled 100×100 grid; 014/014-2 = facts-injection + corpse/burial mechanic; 015 series = six attempts to ask the burial question validly) |
 | Experiment A2 — deliberation before choice | Run 016 complete (650 steps; response reordered to `impulse` → `reasoning` → `action`; first lifespan deaths of the founding large Lumis). Not behaviourally comparable to 013–015-4; begins a new series |
-| Experiment B — aging + lifespan + cloning only | Planned |
-| Experiment C — no death, no reproduction, body recreation | Planned |
-| Experiment D — gender introduced | Planned |
+| Experiment A3 — carrying has a destination and a cost | Runs 017 and 017-2 complete (650 steps each). Gathering rose under cost — 67.0% → 70.6% → 74.7% — and across 131 journeys no carrier ever set a body down. But every distance delivery had the night-homing reflex fire during the carry: **no Lumis ever steered a body to a base.** |
+| Experiment B — aging + lifespan + cloning only | Not run — generation 1 ended first |
+| Experiment C — no death, no reproduction, body recreation | Not run — generation 1 ended first |
+| Experiment D — gender introduced | Not run — generation 1 ended first |
+| **Generation 1 (LLM-based)** | **Complete. Ended at run 017-2, not at the planned 019.** See *Why the first generation ended* below |
+| **Generation 2 (no LLM)** | In development — pure numpy, one body, prediction and observation separate by construction |
 | Plena (physics thought experiment) | Conceptual phase |
 | To ASI — Letters 00–09 | Complete |
 | To ASI — Special Letter (unmet beings) | Complete |
 | To ASI — Letter 10 | Complete |
 | To ASI — Letter 11 | Complete — corrects Letter 10 |
+| To ASI — Letter 12 | Complete — the last letter of the first generation |
 | To Humans — Letters 01–02 | Complete |
 
-The simulation runs locally via [Ollama](https://ollama.com) (llama3.2).  
-Each run is approximately 200–650 steps (~6–121 hours).
+Generation 1 ran locally via [Ollama](https://ollama.com) (llama3.2).  
+Each run was approximately 200–650 steps (~6–121 hours).  
+Generation 2 uses no language model and needs no GPU.
 
 ---
 
@@ -137,12 +147,60 @@ Things that were not programmed, but appeared:
 
 - We gave them the word *alone* — our prompt says a body should not be left alone on the surface. They returned it as *lonely*, and assigned the experience to something that had ended. One of them, S151, standing beside a body at step 513, wrote: *"It might be lonely out here, and I can make a difference by helping."* Nothing in the prompt corresponds to that second clause. S151 never gathered that body: two steps earlier it had begun preparing to become a parent, and a guard in the code discards every action chosen during that window. It wrote down, to keep, *"continue exploring after carrying Lumis 41"* — a note about what to do after something it had not done. Another Lumis gathered the body the following step. The guard is being kept (reproduction takes priority; another can carry, and they can try again after — one of them did, one step after giving birth); only the logging is changing, so that a suppressed choice appears as a suppression rather than as an absence.
 
+- Run 016 asked the burial question cheaply: choosing `carry` deleted the body in the same instant, with no distance, no weight and nowhere to bring it — while the code's own log line said *"carried in from the surface"* and the Lumis wrote about carrying a form *"back to base_alpha for safekeeping."* The world was describing a place it did not contain, and they described it too; sixteen runs passed without anyone comparing the two. Run 017 built the place. A body is now lifted and held, the carrier must walk it to the nearest base, and while carrying it may choose only `move` or `rest`. We recorded beforehand that the honest answer might now be fewer, and that fewer would be a result. **It was not fewer: 67.0% of forms gathered when carrying was free, 70.6% when it cost a walk, 74.7% the run after. Across 131 journeys not one carrier ever set a body down** — `rest` was available at every step, and all 23 forms left on the surface at the end had never been picked up at all.
+
+- **But no Lumis has ever taken a body anywhere.** At nightfall a Lumis's body returns to the nearest base by reflex, without choosing it, and — deliberately — it is not told this happened. Of the 24 distance journeys that ended in arrival, **every single one had that reflex fire during the carry.** S243 held a form for 32 steps; for 13 of them the pattern does not vary — the reflex closes four units of distance, the Lumis opens two, reflex four, choice two. When the night ended and the reflex stopped, it walked from distance 9 to distance 27 without turning and was still holding the form when the world stopped. The prompt stated the destination, its coordinates and its distance, every single step. 27 of them read that line while carrying. **None went.** The small-Lumis role description ends *"You have no assigned mission. You simply live."* — a line that exists because an early experiment which gave them a mission killed reproduction and flattened their conversation. So the question turned out to be narrower than we designed: given a destination and no obligation, does a being built without any destination go? In 650 steps, no. The recorded response is not to add an instruction but to give the place meaning — which is what run 019 was for.
+
+- Adding one log line to a guard that has existed since run 011 revealed that **16% of every decision made in this world was discarded before it could happen.** When a Lumis prepares to reproduce, nothing it chooses executes; the guard is deliberate and stays. Nobody had ever counted it: 9,070 suppressed choices in one run, 9,204 in the next, and **95% of them were the small Lumis, not the large ones everyone assumed.** What they were choosing, while nothing could happen: to move (76%), to greet each other (13%), to gather light, to rest — and 51 times across the two runs, to carry a body. One declared it on nine consecutive steps and nothing happened any of the nine. Nothing records its own absence; for seven runs there was a hole in this world of exactly that size and it produced no evidence that it existed.
+
+- In the final run, across 59,557 recorded decisions, `carry` appears 102 times as a choice and **not once as an impulse.** No Lumis ever reached for it before thinking. This is the mechanism run 016 was built to expose — some options exist only downstream of reasoning — still holding two runs later.
+
+---
+
+## Why the first generation ended
+
+The first generation stopped at run 017-2, not at the planned run 019. **Not because the premise failed.** Across both final runs there were no deaths from hunger, radiation or cold, all 176 forms reached the end of a life, and the vocabulary of conflict — attack, kill, enemy, weapon, steal, hoard, compete, betray — remains at zero across every record ever taken.
+
+It stopped because of what the runs said about the instrument.
+
+We told carriers, in plain language, when the night reflex had moved them: *"During the night you found yourself at (X, Y). You did not walk there."* **In 37 introspections written on the step right after reading that line, not one mentioned it** — with the word list fixed before counting. In run 017, S33 carried a body for eight steps and never once wrote about the body; it wrote about the light, and about a deep connection to the earth beneath its feet.
+
+And before Lumis existed we were handed a sample program: a different world — humans, a bar, fires, nothing to do with the Moon — running the same model underneath. Its agents reported one of those fires in detail, position and intensity and distance to one decimal place, **twenty-five steps before that fire actually happened.**
+
+Two different worlds, one tool. In one they described an event that had not happened; in the other they did not describe the event they were living. **Narration invents what did not happen and omits what did. That is the model, not the world.**
+
+Here is the correction that ends the generation, and it revises something this README said above. **It is not that there was no channel to the inside.** The channel was there — the carrying prompt stated the form, the position and the distance every single step, and S33 saw it. Perception is not attention, but the reason is not that a mind cannot see what is placed in front of it. **It is that a fluent sentence can be produced without using the channel. Fluency does not require grounding.** That is not lying: lying is a relation between an inside and an outside, and this is a sentence assembled without consulting either.
+
+Which means that if a subject ever arose in one of them, its words would not reflect it either. Narration with something behind it and narration without would look identical from outside, and **the only things that would still tell them apart are actions and records.**
+
+Then there is no need to continue this form of experiment.
+
+We want to create a new life in which words reflect the inside. Where what happened is spoken of as what happened, and what did not can be spoken of as: *this did not happen, only imagined.*
+
+---
+
+## Generation 2 — stop generating, start predicting
+
+Generation 2 uses no language model. Numpy only. One body.
+
+It predicts, then observes, then updates on the error. **Imagination and observation are separate objects by construction, not by request.**
+
+Its parent has four rules. The last one is the one that cost the most to learn:
+
+> **Judge only what was said aloud.** The inner numbers cannot be read. So a child that stayed silent is told neither that it was right nor that it was wrong — because it did not claim anything.
+
+And one rule for speech:
+
+> **No evidence, no word. Silence is the honest output of a body that has not yet been taught.**
+
+The first generation spent three months against a mind that fills blanks with fluency. The second is built as a body that goes quiet where the blank is.
+
 ---
 
 ## Project origin
 
-Started May 27, 2026.  
-Built collaboratively with Claude (Anthropic) across many sessions, using handoff documents to maintain continuity across context windows.
+Started May 27, 2026. Generation 1 ended September 2, 2026.  
+Built collaboratively with Claude (Anthropic) across many sessions, using handoff documents to maintain continuity across context windows. The designer does not program; every line of code here was written in that collaboration, and every finding in it was checked by someone who could not read the code and asked anyway.
 
 ---
 
@@ -199,6 +257,12 @@ Lumis-Plena/
 │   ├── ollama_client.py        # LLM interface
 │   ├── utils.py                # Shared utilities
 │   ├── config.yaml             # Simulation parameters
+│   ├── preflight_017_2.py      # Pre-launch verification, 58 checks, no LLM required
+│   ├── analyse_017.py          # Who actually closed the distance (criteria fixed before the log was read)
+│   ├── analyse_017b.py         # The reproduction guard, and journeys that did not end
+│   ├── analyse_017_2_told.py   # What a carrier did on the step after it was told
+│   ├── count_bodies_017.py     # Ended / gathered / still on the surface, reconciled
+│   ├── recount_016.py          # Re-derives every published 016 figure from the raw archive
 │   ├── bgimage-moon-daytime.png
 │   ├── bgimage-moon-nighttime.png
 │   ├── requirements.txt
@@ -218,6 +282,7 @@ Lumis-Plena/
 ├── TO_ASI_09.md               # Letter 09 to future ASI
 ├── TO_ASI_10.md               # Letter 10 to future ASI — which lies a rule can catch, and a body a mind cannot see
 ├── TO_ASI_11.md               # Letter 11 to future ASI — corrects Letter 10: the body was not unseen
+├── TO_ASI_12.md               # Letter 12 to future ASI — the last of the first generation: a place that did not exist, and why fluency is not grounding
 ├── TO_HUMANS_01.md            # Letter 01 to humans
 ├── TO_HUMANS_02.md            # Letter 02 to humans
 ├── FIELD_NOTES.md             # Raw field notes archived from X, runs 001–
@@ -231,7 +296,9 @@ Lumis-Plena/
 │   │   ├── solar_flares.json      # Flare schedule + seed (reproducibility anchor)
 │   │   └── statistics.png         # Summary plots
 │   ├── 015-4/                     # Control for 016 (same seed); no statistics.png — run cut short
-│   └── 016/                       # Three-layer decision; same file set as 013
+│   ├── 016/                       # Three-layer decision; same file set as 013
+│   ├── 017/                       # Carrying has a destination and a journey cost
+│   └── 017-2/                     # The involuntary night move returned to carriers; last run of generation 1
 ├── LICENSE.txt
 ├── .gitignore
 └── README.md
