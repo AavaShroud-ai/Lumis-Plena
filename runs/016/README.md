@@ -106,7 +106,7 @@ EOF
   of which the impulse was also `carry` only 3 times — the other 88 arose during
   reasoning. Against 015-4's zero, under an identical world and an identical offer.
   All 65 burials match a declaration; none occurred without one.
-- Every declaration accounted for: 65 executed, **28 discarded by the
+- Every declaration accounted for: 65 executed, **21 discarded by the
   reproduction-preparation guard with no log line** (the guard skips the entire
   action dispatch, so neither `[BURIAL]` nor `[CARRY_NO_BODY]` can fire — both live
   inside a branch never entered), 3 out of range, 1 reflex override, 1 unexplained
